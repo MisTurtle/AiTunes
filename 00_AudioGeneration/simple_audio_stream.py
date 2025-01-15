@@ -51,6 +51,7 @@ def generate_instrument_sound(filename, sample_rate=44100, duration=3.0, frequen
     print(f"Fichier WAV généré : {filename}")
 
 
+
 if __name__ == "__main__":
     generate_sine_wave()
     generate_ascending_sine_wave(hz_min=150, hz_max=300)

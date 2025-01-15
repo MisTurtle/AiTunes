@@ -6,6 +6,9 @@ import os
 
 def afficher_spectrogramme(audio_path):
     y, sr = librosa.load(audio_path, sr=None)  
+    # Normalisation de l'audio
+    y = librosa.util.normalize(y)
+
     D = librosa.amplitude_to_db(librosa.stft(y), ref=np.max)  
 
     plt.figure(figsize=(10, 6))
