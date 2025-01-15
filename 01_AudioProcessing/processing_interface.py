@@ -36,7 +36,7 @@ class AudioProcessingInterface:
         return self._y, self._sr
 
     def log_spectrogram(self):
-        return librosa.amplitude_to_db(librosa.stft(self._y), ref=np.max)
+        return librosa.amplitude_to_db(np.abs(librosa.stft(self._y)), ref=np.max)
     
     def mel_spectrogram(self, n_mels=128):
         return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels)
@@ -50,8 +50,8 @@ class AudioProcessingInterface:
         :param S: Precomputed spectogram (mel base)
         """
         if S is not None:
-            return librosa.feature.mfcc(S=S, sr=self._sr, n_mfcc=n_features, center=False)
-        return librosa.feature.mfcc(y=self._y, sr=self._sr, n_mfcc=n_features, center=False)    
+            return librosa.feature.mfcc(S=S, sr=self._sr, n_mfcc=n_features)
+        return librosa.feature.mfcc(y=self._y, sr=self._sr, n_mfcc=n_features)    
 
     def display(self, qualifier: str="", n_mels=128, mfcc_features=20):
         fig, ax = plt.subplots(nrows=3, sharex=False)
@@ -78,6 +78,25 @@ class AudioProcessingInterface:
         
         fig.show()
         fig.waitforbuttonpress()
+    
+    def reconstruct_from_mel(self, n_mels=128) -> 'AudioProcessingInterface':
+        """
+        Simulates a reconstruction from a mel spectogram (Not in logarithmic scale)
+        Might be expanded in the future to take in arbitrary spectrogram data depending on the NN output 
+        """
+        mel = self.mel_spectrogram(n_mels=n_mels)
+        self._y = librosa.feature.inverse.mel_to_audio(mel, sr=self._sr)
+        return self
+    
+    def reconstruct_from_mfcc(self, n_mels=128, mfcc_features=20) -> 'AudioProcessingInterface':
+        """
+        Simulates a reconstruction from mfcc features
+        Might be expanded in the future to take in arbitrary mfcc data depending on the NN output
+        """
+        mfcc = self.mfcc(n_features=mfcc_features)
+        self._y = librosa.feature.inverse.mfcc_to_mel(mfcc, n_mels=n_mels)
+        self._y = librosa.feature.inverse.mel_to_audio(self._y)
+        return self
 
     def preprocess(self, *fns) -> 'AudioProcessingInterface':
         for fn in fns:
@@ -85,7 +104,7 @@ class AudioProcessingInterface:
         return self
     
     def reset(self) -> 'AudioProcessingInterface':
-        self._y, self._sr = librosa.load(self.path, sr=None)
+        self._y, self._sr = librosa.load(self._path, sr=None)
         return self
     
     def save(self, outpath: str) -> 'AudioProcessingInterface':
@@ -98,9 +117,14 @@ class AudioProcessingInterface:
 if __name__ == '__main__':
     samples_folder = path.join("Samples", "generated")
     output_folder = path.join("Samples", "processed")
+    
     for filename in listdir(samples_folder):
         i = AudioProcessingInterface.create_for(path.join(samples_folder, filename))
-        i.display(n_mels=256, mfcc_features=20)
+        i.display(n_mels=256, mfcc_features=128)
         i.preprocess(lambda y: np.multiply(y, 10))
-        i.display(qualifier="processed", n_mels=256, mfcc_features=20)
+        i.display(qualifier="processed", n_mels=256, mfcc_features=128)
         i.save(path.join(output_folder, filename))
+        i.reset()
+
+        # i.reconstruct_from_mel().save(path.join(output_folder, "built_from_mel.wav"))
+        # i.reset().reconstruct_from_mfcc(mfcc_features=128).save(path.join(output_folder, "built_from_mfcc.wav"))
