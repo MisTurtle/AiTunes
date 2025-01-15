@@ -35,8 +35,24 @@ def generate_ascending_sine_wave(sample_rate: int = 44100, duration: float = 5, 
         sample_rate, sine_wave_pcm
     )
 
+def generate_instrument_sound(filename, sample_rate=44100, duration=3.0, frequency=261.63):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+
+    harmonics = [1.0, 0.5, 0.3, 0.2, 0.1]
+    signal = sum(harmonics[i] * np.sin(2 * np.pi * (i + 1) * frequency * t) for i in range(len(harmonics)))
+
+    envelope = np.exp(-3 * t)
+    signal = envelope
+
+    signal = (signal / np.max(np.abs(signal)), 32767).astype(np.int16)
+    
+
+    write(filename, sample_rate, signal)
+    print(f"Fichier WAV généré : {filename}")
+
 
 if __name__ == "__main__":
     generate_sine_wave()
     generate_ascending_sine_wave(hz_min=150, hz_max=300)
     generate_ascending_sine_wave(hz_min=300, hz_max=150)
+    generate_instrument_sound()
