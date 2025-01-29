@@ -1,8 +1,8 @@
 import numpy as np
 import torch
-from test_cases import AutoencoderTestCase, FLAG_NONE
+from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
 
-class LinearVectorAugmentationTestCase(AutoencoderTestCase):
+class LinearVectorAugmentationTestCase(AutoencoderTaskCase):
 
     @staticmethod
     def expand_3d_vector(val: np.array):

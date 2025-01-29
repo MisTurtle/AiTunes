@@ -1,9 +1,11 @@
+import autoloader
+import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 
-from autoencoders_modules import VariationalAutoEncoder
-from test_cases import *
+from aitunes.autoencoders import VariationalAutoEncoder
+from aitunes.autoencoders.task_cases import *
 
 
 def loss_criterion(prediction, target, mu, log_var):
@@ -12,7 +14,7 @@ def loss_criterion(prediction, target, mu, log_var):
     return 100 * reconstruction_loss + KL_Divergence
     
 
-def example1(model_weights: str = "02_AutoEncoders/models/vae_5d_vectors.pth"):
+def example1(model_weights: str = "assets/models/vae_5d_vectors.pth"):
     model = VariationalAutoEncoder((5, 4, 3))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     flags = FLAG_PLOTTING
@@ -24,7 +26,7 @@ def example1(model_weights: str = "02_AutoEncoders/models/vae_5d_vectors.pth"):
     test_case.interactive_evaluation()
 
 
-def example2(model_weights: str = "02_AutoEncoders/models/vae_mnist.pth"):
+def example2(model_weights: str = "assets/models/vae_mnist.pth"):
     model = VariationalAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     flags = FLAG_PLOTTING
@@ -38,8 +40,8 @@ def example2(model_weights: str = "02_AutoEncoders/models/vae_mnist.pth"):
 
 
 def main(): 
-    example1()
-    # example2()
+    # example1()
+    example2()
 
 if __name__ == "__main__":
     main()

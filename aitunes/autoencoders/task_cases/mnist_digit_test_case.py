@@ -1,7 +1,8 @@
 from matplotlib.widgets import Slider
-from test_cases import AutoencoderTestCase, FLAG_NONE, normalize
+from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
+from aitunes.utils import normalize
 
-import time
+from os import path
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -9,13 +10,13 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
-class MnistDigitCompressionTestCase(AutoencoderTestCase):
+class MnistDigitCompressionTestCase(AutoencoderTaskCase):
 
     def __init__(self, model, weights_path, loss, optimizer, flags: int = FLAG_NONE):
         super().__init__("MNIST Compression", model, weights_path, loss, optimizer, flags)
         transform = transforms.ToTensor()  # This will convert images to PyTorch tensors scaled to [0, 1] range for grayscale
-        train_dataset = torchvision.datasets.MNIST(root="Samples", train=True, download=True, transform=transform)
-        test_dataset = torchvision.datasets.MNIST(root="Samples", train=False, download=True, transform=transform)
+        train_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=True, download=True, transform=transform)
+        test_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=False, download=True, transform=transform)
 
         self.train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=True)

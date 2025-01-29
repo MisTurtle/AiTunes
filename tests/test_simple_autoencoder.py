@@ -1,12 +1,12 @@
+import autoloader
 import torch.optim as optim
 import torch.nn as nn
 
-
-from autoencoders_modules import SimpleAutoEncoder
-from test_cases import *
+from aitunes.autoencoders import SimpleAutoEncoder
+from aitunes.autoencoders.task_cases import *
     
 
-def example1(model_weights: str = "02_AutoEncoders/models/ae_5d_vectors.pth"):
+def example1(model_weights: str = "assets/Models/ae_5d_vectors.pth"):
     model = SimpleAutoEncoder((5, 4, 3))
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -19,7 +19,7 @@ def example1(model_weights: str = "02_AutoEncoders/models/ae_5d_vectors.pth"):
     test_case.interactive_evaluation()
 
 
-def example2(model_weights: str = "02_AutoEncoders/models/ae_mnist.pth"):
+def example2(model_weights: str = "assets/Models/ae_mnist.pth"):
     model = SimpleAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -34,8 +34,8 @@ def example2(model_weights: str = "02_AutoEncoders/models/ae_mnist.pth"):
 
 
 def main(): 
-    # example1()
-    example2()
+    example1()
+    # example2()
 
 if __name__ == "__main__":
     main()

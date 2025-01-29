@@ -1,3 +1,4 @@
+import autoloader
 import numpy as np
 import librosa
 from os import path, listdir
@@ -14,15 +15,15 @@ def extract_mel_spectrogram(path, sr=None, nb_mels=None):
 
 if __name__ == "__main__":
     # Inspired from https://librosa.org/doc/latest/generated/librosa.feature.mfcc.html#librosa.feature.mfcc
-    samples_folder = path.join("Samples", "generated")
+    samples_folder = path.join("assets", "Samples", "generated")
     for filename in listdir(samples_folder):
         p = path.join(samples_folder, filename)
         fig, ax = plt.subplots(nrows=2, sharex=True)
         
-        S = extract_mel_spectrogram(p)
+        S = extract_mel_spectrogram(p, nb_mels=128)
         S_img = librosa.display.specshow(librosa.power_to_db(S, ref=np.max), x_axis='time', y_axis='mel', ax=ax[0])
 
-        mfcc = extract_mfcc(p)
+        mfcc = extract_mfcc(p, nb_features=128)
         mfcc_img = librosa.display.specshow(mfcc, x_axis='time', ax=ax[1])
 
         fig.colorbar(S_img, ax=[ax[0]])

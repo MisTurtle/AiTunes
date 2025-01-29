@@ -1,12 +1,10 @@
-from itertools import cycle
 from os import path
 from typing import Any, Callable, Union
 from abc import ABC, abstractmethod
-
-from autoencoders_modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
+from aitunes.utils import get_loading_char
+from aitunes.autoencoders.autoencoders_modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 
 import time
-import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
@@ -22,25 +20,11 @@ import torch.optim as optim
 # - A list of extra results yielded by the model (*args)
 Middleware = Callable[[torch.tensor, torch.tensor, torch.tensor, list[Any], list[torch.tensor]], None]
 
-loading_cycle = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
-loading_char = next(loading_cycle)
-last_call, switch_loading_char_every = 0, 0.05  # seconds
-
-def get_loading_char():
-    global last_call, loading_char
-    if time.time() - last_call >= switch_loading_char_every:
-        last_call, loading_char = time.time(), next(loading_cycle)
-    return loading_char
-
-def normalize(nparray):
-    return (nparray - np.min(nparray)) / (np.max(nparray) - np.min(nparray))
-
-
 FLAG_NONE       = 0b0000  # Clean slate
 FLAG_TRAINED    = 0b0001  # On if the model has been trained
 FLAG_PLOTTING   = 0b0010  # On if plotting is enabled
 
-class AutoencoderTestSupport:
+class AutoencoderTaskSupport:
 
     def __init__(self, name, flags=FLAG_NONE):
         self._name = name
@@ -70,38 +54,38 @@ class AutoencoderTestSupport:
     def has(self, flag: int) -> bool:
         return bool(self._state & flag)
     
-    def set(self, flag: int, val: bool = True) -> 'AutoencoderTestSupport':
+    def set(self, flag: int, val: bool = True) -> 'AutoencoderTaskSupport':
         if val:
             self._state |= flag
         else:
             self.unset(flag)
         return self
     
-    def unset(self, flag: int) -> 'AutoencoderTestSupport':
+    def unset(self, flag: int) -> 'AutoencoderTaskSupport':
         self._state &= ~flag
         return self
     
-    def blank_epoch(self) -> 'AutoencoderTestSupport':
+    def blank_epoch(self) -> 'AutoencoderTaskSupport':
         self.current_epoch_losses.clear()
         self.epoch_start = time.time()
         return self
     
-    def next_epoch(self) -> 'AutoencoderTestSupport':
+    def next_epoch(self) -> 'AutoencoderTaskSupport':
         self.ran_epochs += 1
         self.all_epoch_losses.append(self.epoch_loss)
         self.plot_loss_progress(1)
         return self.blank_epoch()
     
-    def add_total_epochs(self, n: int) -> 'AutoencoderTestSupport':
+    def add_total_epochs(self, n: int) -> 'AutoencoderTaskSupport':
         self.total_epochs += n
         return self
     
-    def add_batch_result(self, loss: float) -> 'AutoencoderTestSupport':
+    def add_batch_result(self, loss: float) -> 'AutoencoderTaskSupport':
         self.current_epoch_losses.append(loss)
         return self
     
     # PLOTTING FUNCTIONS BELOW
-    def plot_loss_progress(self, every: int = 10) -> 'AutoencoderTestSupport':
+    def plot_loss_progress(self, every: int = 10) -> 'AutoencoderTaskSupport':
         """
         :param every: Only perform the plotting operation every x calls
         """
@@ -128,7 +112,7 @@ class AutoencoderTestSupport:
 
     # LOGGING FUNCTIONS BELOW, CAN BE IGNORED
 
-    def log(self, msg: str) -> 'AutoencoderTestSupport':
+    def log(self, msg: str) -> 'AutoencoderTaskSupport':
         print(f"{self.prefix} {msg}")
         return self
     
@@ -136,7 +120,7 @@ class AutoencoderTestSupport:
         el = self.epoch_loss
         return f"{self.prefix} [{prefix}] Running time: {self.epoch_runtime:.2f}s... Epoch loss: {el:.2f}... Avg. Loss: {el / max(1, self.epoch_batches):.4f}"
 
-    def log_running_loss(self, prefix: str, new_line: bool = False, loading: bool = True) -> 'AutoencoderTestSupport':
+    def log_running_loss(self, prefix: str, new_line: bool = False, loading: bool = True) -> 'AutoencoderTaskSupport':
         line = self.get_running_loss_line(prefix)
         if loading:
             line = get_loading_char() + " " + line
@@ -145,12 +129,12 @@ class AutoencoderTestSupport:
         print("\r" + line, end='')
         return self
     
-    def log_training_loss(self, ended: bool = False) -> 'AutoencoderTestSupport':
+    def log_training_loss(self, ended: bool = False) -> 'AutoencoderTaskSupport':
         self.log_running_loss(f"Epoch {self.ran_epochs + 1}/{self.total_epochs}", ended, not ended)
         return self
 
 
-class AutoencoderTestCase(ABC):
+class AutoencoderTaskCase(ABC):
     """
     Class describing a test case for an Autoencoder (or VAE) model.
     Anything that is not directly related to the test contents or the model is handled by an AutoencoderTestSupport instance
@@ -159,7 +143,7 @@ class AutoencoderTestCase(ABC):
     def __init__(self, name: str, model: Union[SAE, VAE], weights_path: str, loss_criterion: nn.Module, optimizer: optim.Optimizer, flags: int = FLAG_NONE):
         self._model = model
         self._weights_path = weights_path
-        self._support = AutoencoderTestSupport(name, flags)
+        self._support = AutoencoderTaskSupport(name, flags)
 
         self._loss_criterion: nn.Module = loss_criterion
         self._optimizer: optim.Optimizer = optimizer

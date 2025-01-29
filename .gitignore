@@ -1,6 +1,4 @@
 **/.venv
-**/Samples/
 **/__pycache__
-Resources/Sujet.pdf
-Resources/Notes.md
-Resources/TP_5A
+assets/Samples/
+assets/Resources/
