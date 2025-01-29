@@ -3,6 +3,7 @@ import librosa
 import soundfile as sf
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 
 class AudioProcessingInterface:
@@ -18,8 +19,8 @@ class AudioProcessingInterface:
     """
 
     @staticmethod
-    def create_for(path):
-        return AudioProcessingInterface(path)
+    def create_for(path , sr):
+        return AudioProcessingInterface(path ,sr)
 
     def __init__(self, path: str, sr=None):
         """
@@ -52,8 +53,9 @@ class AudioProcessingInterface:
         if S is not None:
             return librosa.feature.mfcc(S=S, sr=self._sr, n_mfcc=n_features)
         return librosa.feature.mfcc(y=self._y, sr=self._sr, n_mfcc=n_features)    
+    
 
-    def display(self, qualifier: str="", n_mels=128, mfcc_features=20):
+    def display(self, qualifier: str="", n_mels=128, mfcc_features=20 ,save_to_dir=None, headless=True):
         fig, ax = plt.subplots(nrows=3, sharex=False)
 
         # Log Spectrogram
@@ -75,9 +77,19 @@ class AudioProcessingInterface:
         ax[2].set(title="MFCC Features")
 
         plt.suptitle(qualifier + " > " + path.basename(self._path))
-        
-        fig.show()
-        fig.waitforbuttonpress()
+
+         # enregistrer les spectogrammes
+        if save_to_dir:
+            if not os.path.exists(save_to_dir):
+               os.makedirs(save_to_dir)
+            save_path = os.path.join(save_to_dir, f"{path.basename(self._path)}_spectrogram.png")
+            fig.savefig(save_path)
+
+        # Afficher les graphiques
+        if not headless  :
+            fig.show()
+            fig.waitforbuttonpress()
+
     
     def reconstruct_from_mel(self, n_mels=128) -> 'AudioProcessingInterface':
         """
