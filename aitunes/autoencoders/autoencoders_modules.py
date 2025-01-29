@@ -96,11 +96,11 @@ class CVAE(nn.Module):
         self._shape_before_bottleneck = self._calculate_shape_before_bottleneck()
 
         # Encoder and Decoder
-        self.encoder = self._Encoder()
-        self.decoder = self._Decoder()
+        self._encoder = self._create_encoder()
+        self._decoder = self._create_decoder()
 
 
-    def _Encoder(self):
+    def _create_encoder(self):
         layers = []
 
         input_channels = self.input_shape[0]
@@ -116,8 +116,7 @@ class CVAE(nn.Module):
         layers.append(nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim * 2))  # Sortie mu and log_var
         return nn.Sequential(*layers) 
     
-    def _Decoder(self):
-
+    def _create_decoder(self):
         layers = [nn.Linear(self.latent_space_dim, self._shape_before_bottleneck[0])]
         
         # Transformee le vecteur 1D en une forme 3D
@@ -139,7 +138,7 @@ class CVAE(nn.Module):
         return nn.Sequential(*layers)
     
     
-    def _shape_before_bottleneck(self):
+    def _calculate_shape_before_bottleneck(self):
         """
         Calcule les dimensions exactes avant la couche de goulot d'étranglement.
         """
@@ -150,7 +149,7 @@ class CVAE(nn.Module):
         return (self.conv_filters[-1] * h * w, self.conv_filters[-1], h, w)
     
     def _encode(self, x):
-        x = self.encoder(x)
+        x = self._encoder(x)
         mu, log_var = torch.chunk(x, 2, dim=1)
         return mu, log_var
 
@@ -160,14 +159,13 @@ class CVAE(nn.Module):
         return mu + eps * std
 
     def _decode(self, z):
-        return self.decoder(z)
-    
+        return self._decoder(z)
     
     def forward(self, x):
         mu, log_var = self._encode(x)
         z = self._sample(mu, log_var)
         x_reconstructed = self._decode(z)
-        return z,x_reconstructed, mu, log_var
+        return z, x_reconstructed, mu, log_var
 
     
 

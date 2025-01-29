@@ -12,12 +12,13 @@ import torchvision.transforms as transforms
 
 class MnistDigitCompressionTestCase(AutoencoderTaskCase):
 
-    def __init__(self, model, weights_path, loss, optimizer, flags: int = FLAG_NONE):
+    def __init__(self, model, weights_path, loss, optimizer, flatten: bool, flags: int = FLAG_NONE):
         super().__init__("MNIST Compression", model, weights_path, loss, optimizer, flags)
         transform = transforms.ToTensor()  # This will convert images to PyTorch tensors scaled to [0, 1] range for grayscale
         train_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=False, download=True, transform=transform)
 
+        self.flatten = flatten
         self.train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=True)
 
@@ -35,8 +36,11 @@ class MnistDigitCompressionTestCase(AutoencoderTaskCase):
             dataset = self.test_loader
         
         for data, labels in dataset:  # Might use labels later
-            yield data.view(data.size(0), -1), labels
-
+            if self.flatten:
+                yield data.view(data.size(0), -1), labels
+            else:
+                yield data, labels
+            
     def interactive_evaluation(self):
         # Interactive plot
         fig, ax = plt.subplots(nrows=1, ncols=2)  # Left pane is the graph, while the right pane is the display
@@ -46,7 +50,6 @@ class MnistDigitCompressionTestCase(AutoencoderTaskCase):
         # 2D Point
         x, y = (self.i_xmin + self.i_xmax) / 2, (self.i_ymin + self.i_ymax) / 2
         point, = ax[0].plot(x, y, 'bo', markersize=10)
-
         # Sliders
         ax_x = plt.axes([0.1, 0.02, 0.65, 0.03])
         ax_y = plt.axes([0.1, 0.06, 0.65, 0.03])
@@ -55,7 +58,7 @@ class MnistDigitCompressionTestCase(AutoencoderTaskCase):
         
         def update(val):
             point.set_data([slider_x.val], [slider_y.val])
-            prediction = self.model._decoder(torch.tensor([slider_x.val, slider_y.val], dtype=torch.float32))
+            prediction = self.model._decoder(torch.tensor([-abs(slider_x.val), -abs(slider_y.val)], dtype=torch.float32))
             rec_image = normalize(prediction.squeeze().cpu().detach().numpy().reshape(28, 28)) * 255
             ax[1].imshow(rec_image.astype(np.uint8), cmap='gray')
 
@@ -72,7 +75,7 @@ class MnistDigitCompressionTestCase(AutoencoderTaskCase):
     def set_bounds(self, x: tuple[float, float], y: tuple[float, float]):
         self.i_xmin, self.i_xmax = min(x), max(x)
         self.i_ymin, self.i_ymax = min(y), max(y)
-
+        
     def prepare_embedded_region_mw(self, og, pred, embeds, labels, args):
         self.embeds += embeds.tolist()
         self.labels += labels[0].tolist()
