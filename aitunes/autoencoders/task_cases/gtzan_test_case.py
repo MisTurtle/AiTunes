@@ -1,4 +1,4 @@
-from aitunes.utils import get_loading_char, read_labelled_folder
+from aitunes.utils import download_and_extract, get_loading_char, read_labelled_folder
 from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
 from aitunes.audio_processing import PreprocessingCollection, AudioProcessingInterface
 
@@ -23,7 +23,6 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
         """
         super().__init__("GTZAN", model, weights_path, loss, optimizer, flags)
         
-        self._dataset_url = "https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification"
         self._dataset_path = path.join("assets", "Samples", "GTZAN")
         self._flatten = flatten
         self._preprocessing_fn = preprocessing_fn
@@ -31,6 +30,7 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
         self.test_loader = []
 
         self._download_dataset()
+        
         for label, files in read_labelled_folder(path.join(self._dataset_path, "genres_original"), ".wav").items():
             train_batch = files[:-5] if len(files) > 5 else files
             test_batch = files[-5:] if len(files) > 5 else files
@@ -40,50 +40,25 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
         self.add_middleware(self.save_verification_extract)
     
     def _download_dataset(self):
-        if path.exists(self._dataset_path):
-            print("Dataset found.")
-            return
-        
-        zip_file_path = path.join(self._dataset_path, "..", "GTZAN_Dataset.zip")
+        download_and_extract(
+            url="https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification",
+            target_path=self._dataset_path,
+            zip_path=path.join(self._dataset_path, "..", "GTZAN_Dataset.zip"),
+            final_size=1241.20,
+            standalone_zipped_dir="Data",
+            clean=True
+        )
 
-        if not path.exists(zip_file_path):
-            print(f"Dataset not found at {self._dataset_path}... Downloading from {self._dataset_url}")
-            response = requests.get(self._dataset_url, stream=True)
-
-            if response.status_code == 200:
-                dl_size, final_size = 0, 1.3015 * 1e9
-                with open(zip_file_path, "wb") as file:
-                    for chunk in response.iter_content(chunk_size=1024):
-                        if chunk:
-                            dl_size += len(chunk)
-                            file.write(chunk)
-                            print(f"\r{get_loading_char()} {dl_size / 1e9:.4f} GB / 1.21 GB ({100 * dl_size / final_size:.2f}%)", end='')
-            else:
-                raise Exception(f"Failed to download file. Status code: {response.status_code}")
-        
-        print(f"Download completed. Extracting...")
-        makedirs(self._dataset_path)
-        data_dir_to_rm = path.join(self._dataset_path, "Data")
-        with zipfile.ZipFile(zip_file_path, 'r') as zipf:
-            zipf.extractall(self._dataset_path)
-        for filename in listdir(data_dir_to_rm):
-            move(path.join(data_dir_to_rm, filename), path.join(self._dataset_path))
-        rmdir(data_dir_to_rm)
-        
-        print(f"Success.")
-
-    
     def save_verification_extract(self, og, pred, embeds, labels, args):
         for i, label in enumerate(labels[0]):
             og_item = np.reshape(og[i], (32, -1))
             pred_item = np.reshape(pred[i], (32, -1))
             
-            # print(pred_item, torch.min(pred_item), torch.max(pred_item))
-            p_i = AudioProcessingInterface.create_from_log_mel(f"assets/Samples/generated/gtzan/generated_{i}.wav", pred_item.cpu().numpy(), sr=22050 // 4)
-            p_i.save(None).display(qualifier=f"Prediction {i}")
+            p_i = AudioProcessingInterface.create_for(f"assets/Samples/generated/gtzan/generated_{i}.wav", mode="log_mel", data=pred_item.cpu().numpy())
+            p_i.save(None).summary(qualifier=f"Prediction {i}")
             
-            og_i = AudioProcessingInterface.create_from_log_mel(f"assets/Samples/generated/gtzan/original_{i}.wav", og_item.cpu().numpy(), sr=22050 // 4)
-            og_i.save(None).display(qualifier=f"Original {i}")
+            og_i = AudioProcessingInterface.create_from_log_mel(f"assets/Samples/generated/gtzan/original_{i}.wav", mode="log_mel", data=og_item.cpu().numpy())
+            og_i.save(None).summary(qualifier=f"Original {i}")
 
         a = input()
         

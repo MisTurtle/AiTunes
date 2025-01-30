@@ -81,18 +81,7 @@ def example4(model_weights: str = "assets/models/vae_gtzan.pth"):
 
     def path_to_trainable_audio(path: str):
         try:
-            # interface = AudioProcessingInterface.create_for(path, sr)
-            # interface.save("assets/Samples/generated/gtzan/test.wav")
-            # interface.display("Original")
-            # interface.extract_window(1)
-            # interface.save("assets/Samples/generated/gtzan/test_cut.wav")
-            # interface.display("Cut")
-            # interface.preprocess(lambda y: PreprocessingCollection.normalise(y, 0, 1))
-            # interface.save("assets/Samples/generated/gtzan/test_normalized.wav")
-            # interface.display("Normalized")
-            # a = input("Enter to go next")
-            return AudioProcessingInterface.create_for(path, sr)\
-                    .extract_window(1.)\
+            return AudioProcessingInterface.create_for(path, mode="file")\
                     .preprocess(lambda y: PreprocessingCollection.normalise(y, 0, 1))\
                     .log_mel_spectrogram(n_mels=n_mels)
         
@@ -116,7 +105,7 @@ def example5(model_weights: str = "assets/models/cvae_gtzan.pth"):
     
     model = CVAE(
         input_shape=[1, *expected_input_size],
-        conv_filters=[1024, 512, 256],
+        conv_filters=[64, 32, 16],
         conv_kernels=[3, 3, 3],
         conv_strides=[1, 1, 1],
         latent_space_dim=128
@@ -126,11 +115,11 @@ def example5(model_weights: str = "assets/models/cvae_gtzan.pth"):
 
     def path_to_trainable_audio(path: str):
         try:
-            spect = AudioProcessingInterface.create_for(path, sr, duration=unit_audio_length)\
+            spect = AudioProcessingInterface.create_for(path, mode="file", duration=unit_audio_length)\
                     .preprocess(lambda y: PreprocessingCollection.normalise(y, 0, 1))\
                     .log_mel_spectrogram(n_mels=n_mels)
             # test_i = AudioProcessingInterface.create_from_log_mel("assets/Samples/generated/gtzan/test.wav", spect, sr=sr)
-            # test_i.display("Actual original")
+            # test_i.summary("Actual original")
             # test_i.save(outpath=None)
             return spect
         

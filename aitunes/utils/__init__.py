@@ -1,9 +1,16 @@
-import time
-import numpy as np
+import string
+from typing import Union
+from itertools import cycle
 
 import os
-import os.path as path
-from itertools import cycle
+from os import path, makedirs, listdir, rmdir, remove
+from shutil import move
+import time
+import zipfile
+import numpy as np
+import random
+
+import requests
 
 loading_cycle = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
 loading_char = next(loading_cycle)
@@ -43,3 +50,53 @@ def read_labelled_folder(path_to_root: str, ext: str = "") -> dict[list[str]]:
             ordered_per_label[label].append(path.join(label_path, labelled_item))
     
     return ordered_per_label
+
+def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] = None, final_size: Union[float, None] = None, standalone_zipped_dir: Union[str, None] = None, clean: bool = True):
+    """
+    Download and extract a zip file to a given path
+    :param url: Remote url to download from
+    :param target_path: Where to download the contents
+    :param zip_path: Temporary zip path to write to before extracting to `target_path`. A random string is generated if None is given
+    :param final_size: Expected download size (in MB), only useful for visual purpose
+    :param standalone_zipped_dir: Name of the dir if the root of the zip file only contains one folder, take the contents of that folder and move it upwards one rank
+    :param clean: Temporary zip file gets deleted if True
+    """
+    if path.exists(target_path):
+        print(f"Skipped download for {url}: Items exist at path {target_path}")
+        return
+
+    if zip_path is None:
+        zip_path = path.join(target_path, "..", random.choices(string.ascii_letters, 9) + ".zip")
+    
+    print(f"Downloading from {url} to {zip_path}")
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise Exception(f"Failed to download from {url} (Error {response.status_code})")
+    
+    one_mb = 1024 * 1024
+    dl_size = 0
+    dl_suffix = lambda x: "" if final_size is None else f" / {final_size:.2f} MB ({100 * x / final_size:.2f}%)"
+    try:
+        with open(zip_path, "wb") as file:
+            for chunk in response.iter_content(chunk_size=4096):
+                if chunk:
+                    dl_size += len(chunk) / one_mb
+                    file.write(chunk)
+                    print(f"\r{get_loading_char()} {dl_size:.2f} MB{dl_suffix(dl_size)}", end='')
+
+        print(f"\rDownload complete. Extracting to {target_path}")
+        makedirs(target_path)
+
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            zipf.extractall(target_path)
+        
+        if standalone_zipped_dir is not None:
+            data_dir_to_rm = path.join(target_path, standalone_zipped_dir)
+            for filename in listdir(data_dir_to_rm):
+                move(path.join(data_dir_to_rm, filename), path.join(target_path))
+            rmdir(data_dir_to_rm)
+
+        print(f"Successfully extracted to {target_path}")
+    finally:
+        if clean:
+            remove(zip_path)

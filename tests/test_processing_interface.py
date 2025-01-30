@@ -10,17 +10,19 @@ if __name__ == '__main__':
     samples_folder = path.join("assets", "Samples", "generated")
     output_folder = path.join("assets", "Samples", "processed")
     
+    n_mels = 128
+    mfcc_features = 64
     for filename in listdir(samples_folder):
-        i = AudioProcessingInterface.create_for(path.join(samples_folder, filename))
-        i.display(n_mels=256, mfcc_features=128)
-        i.extract_window(0.5).preprocess(lambda y: np.multiply(y, 10))
-        i.display(qualifier="processed", n_mels=256, mfcc_features=128)
-        i.save(path.join(output_folder, filename))
-        i.reset()
+        if path.isdir(path.join(samples_folder, filename)):
+            continue
 
-        # i.reconstruct_from_mel().save(path.join(output_folder, "built_from_mel.wav"))
-        # i.reset().reconstruct_from_mfcc(mfcc_features=128).save(path.join(output_folder, "built_from_mfcc.wav"))
+        i = AudioProcessingInterface.create_for(path.join(samples_folder, filename), mode="file")
+        i.summary(n_mels=n_mels, mfcc_features=mfcc_features)
+        i.extract_window(5, method="start")
+        i.summary(qualifier="processed", n_mels=n_mels, mfcc_features=mfcc_features).save(path.join(output_folder, filename))
 
-    while plt.waitforbuttonpress() is False:
-        continue
+        i.reconstruct_from_mel(n_mels=n_mels).save(path.join(output_folder, "from_mel_" + filename))
+        i.reconstruct_from_mfcc(n_mels=n_mels, mfcc_features=mfcc_features).save(path.join(output_folder, "from_mfcc_" + filename))
+
+    plt.waitforbuttonpress()
     plt.close('all')
