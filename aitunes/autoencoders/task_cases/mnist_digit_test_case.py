@@ -58,7 +58,11 @@ class MnistDigitCompressionTestCase(AutoencoderTaskCase):
         
         def update(val):
             point.set_data([slider_x.val], [slider_y.val])
-            prediction = self.model._decoder(torch.tensor([-abs(slider_x.val), -abs(slider_y.val)], dtype=torch.float32))
+            if self.flatten:
+                decoder_input = torch.tensor([slider_x.val, slider_y.val], dtype=torch.float32)
+            else:
+                decoder_input = torch.tensor([[slider_x.val, slider_y.val]], dtype=torch.float32)
+            prediction = self.model._decoder(decoder_input)
             rec_image = normalize(prediction.squeeze().cpu().detach().numpy().reshape(28, 28)) * 255
             ax[1].imshow(rec_image.astype(np.uint8), cmap='gray')
 

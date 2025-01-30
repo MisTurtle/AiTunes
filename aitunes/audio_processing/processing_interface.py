@@ -1,4 +1,5 @@
-from os import path, listdir, mkdir
+from os import path, makedirs
+from typing import Union
 import librosa
 import soundfile as sf
 import numpy as np
@@ -19,22 +20,61 @@ class AudioProcessingInterface:
     """
 
     @staticmethod
-    def create_for(path , sr):
-        return AudioProcessingInterface(path ,sr)
+    def create_for(path, sr=None, duration=None):
+        return AudioProcessingInterface(path, sr=sr, duration=duration)
+    
+    @staticmethod
+    def create_from_data(path, y, sr=None):
+        return AudioProcessingInterface(path, y=y, sr=sr)
+    
+    @staticmethod
+    def create_from_mel(path, mel, sr=None):
+        return AudioProcessingInterface(path, y=librosa.feature.inverse.mel_to_audio(mel), sr=sr)
+    
+    @staticmethod
+    def create_from_log_mel(path, log_mel, sr=None):
+        return AudioProcessingInterface(
+            path,
+            y=librosa.feature.inverse.mel_to_audio(librosa.db_to_power(log_mel)),
+            sr=sr
+        )
+        
 
-    def __init__(self, path: str, sr=None):
+    def __init__(self, path: str, y=None, sr=None, duration: Union[float, None]=None):
         """
         :param path: Path to the .wav audio file
         :param sr: Sample rate for the WAV file, None means the audio isn't resampled
         """
         self._path = path
-        self._y, self._sr = librosa.load(path, sr=None)
+        if y is None:
+            self._y, self._sr = librosa.load(path, sr=sr, duration=duration)
+        else:
+            self._y, self._sr = y, sr or 22050
 
     def get_path(self) -> str:
         return self._path
 
     def get_data(self) -> tuple:
         return self._y, self._sr
+    
+    def extract_window(self, duration: float, method: str = "start") -> 'AudioProcessingInterface':
+        """
+        Cuts the audio to a given duration
+        :param duration: The target duration
+        :param method: How to choose where to extract the window (Values are [start, end, random])
+        """
+        window_size = int(self._sr * duration)
+        if window_size > self._y.shape[0]:
+            return self
+        
+        match method:
+            case "start":
+                self._y = self._y[:window_size]
+            case "end":
+                self._y = self._y[-window_size:]
+            case "random":
+                pass  # TODO
+        return self
 
     def log_spectrogram(self):
         return librosa.amplitude_to_db(np.abs(librosa.stft(self._y)), ref=np.max)
@@ -116,12 +156,16 @@ class AudioProcessingInterface:
         return self
     
     def reset(self) -> 'AudioProcessingInterface':
+        if not path.isfile(self._path):
+            return self
+        
         self._y, self._sr = librosa.load(self._path, sr=None)
         return self
     
-    def save(self, outpath: str) -> 'AudioProcessingInterface':
-        if not path.exists(path.dirname(outpath)):
-            mkdir(path.dirname(outpath))
+    def save(self, outpath: Union[str, None]) -> 'AudioProcessingInterface':
+        if outpath is None:
+            outpath = self.get_path()
+        makedirs(path.dirname(outpath), exist_ok=True)
         sf.write(outpath, self._y, self._sr)
         return self
         

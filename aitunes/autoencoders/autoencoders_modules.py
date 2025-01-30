@@ -86,17 +86,18 @@ class VariationalAutoEncoder(nn.Module):
 class CVAE(nn.Module):
 
     def __init__(self, input_shape, conv_filters, conv_kernels, conv_strides, latent_space_dim):
-
         super(CVAE, self).__init__()
         self.input_shape = input_shape  
-        self.conv_filters = conv_filters #le nombre de filtres dans chaque couche de convolution
-        self.conv_kernels = conv_kernels
-        self.conv_strides = conv_strides
+        self.conv_filters = conv_filters  # Number of channels to output after each layer
+        self.conv_kernels = conv_kernels  # Convolutional kernel size
+        self.conv_strides = conv_strides  # How much to move the kernel after each iteration
         self.latent_space_dim = latent_space_dim
         self._shape_before_bottleneck = self._calculate_shape_before_bottleneck()
 
         # Encoder and Decoder
         self._encoder = self._create_encoder()
+        self._mu = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
+        self._log_var = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
         self._decoder = self._create_decoder()
 
 
@@ -109,11 +110,10 @@ class CVAE(nn.Module):
         for out_channels, kernel_size, stride in zip(self.conv_filters, self.conv_kernels, self.conv_strides):
             layers.append(nn.Conv2d(input_channels, out_channels, kernel_size, stride, padding=1))
             layers.append(nn.ReLU())  #non-linéarité
-            layers.append(nn.BatchNorm2d(out_channels)) #Normalisation
+            # layers.append(nn.BatchNorm2d(out_channels)) #Normalisation
             input_channels = out_channels
-
+        
         layers.append(nn.Flatten())
-        layers.append(nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim * 2))  # Sortie mu and log_var
         return nn.Sequential(*layers) 
     
     def _create_decoder(self):
@@ -130,7 +130,7 @@ class CVAE(nn.Module):
         ):
             layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=1))
             layers.append(nn.ReLU())
-            layers.append(nn.BatchNorm2d(out_channels))
+            # layers.append(nn.BatchNorm2d(out_channels))
             input_channels = out_channels
 
         layers.append(nn.ConvTranspose2d(self.conv_filters[0], self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=1))
@@ -150,20 +150,19 @@ class CVAE(nn.Module):
     
     def _encode(self, x):
         x = self._encoder(x)
-        mu, log_var = torch.chunk(x, 2, dim=1)
+        mu, log_var = self._mu(x), self._log_var(x)
         return mu, log_var
 
-    def _sample(self, mu, log_var):
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        return mu + eps * std
+    def reparameterize(self, mu, log_var):
+        epsilon = torch.randn_like(mu)
+        return mu + log_var * epsilon
 
     def _decode(self, z):
         return self._decoder(z)
     
     def forward(self, x):
         mu, log_var = self._encode(x)
-        z = self._sample(mu, log_var)
+        z = self.reparameterize(mu, log_var)
         x_reconstructed = self._decode(z)
         return z, x_reconstructed, mu, log_var
 

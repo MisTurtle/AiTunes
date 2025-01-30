@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 class PreprocessingCollection:
 
     @staticmethod
-    def apply_padding(signal, num_expected_samples, mode="constant", padding_side="right"):
+    def apply_padding(signal, _, num_expected_samples, mode="constant", padding_side="right"):
         """
-        Applique un padding à un signal si sa longueur est inférieure à celle attendue."""
+        Applique un padding à un signal si sa longueur est inférieure à celle attendue.
+        """
 
         if len(signal) < num_expected_samples:
   
