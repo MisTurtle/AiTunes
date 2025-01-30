@@ -1,16 +1,19 @@
-import string
 from typing import Union
 from itertools import cycle
-
-import os
 from os import path, makedirs, listdir, rmdir, remove
 from shutil import move
+
+import os
 import time
+import string
 import zipfile
 import numpy as np
 import random
-
 import requests
+import torch
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 loading_cycle = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
 loading_char = next(loading_cycle)

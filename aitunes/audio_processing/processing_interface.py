@@ -48,7 +48,7 @@ class AudioProcessingInterface:
             case "mel":
                 self._y = librosa.feature.inverse.mel_to_audio(self._y, **kwargs)
             case "log_mel":
-                self._y = librosa.feature.inverse.mel_to_audio(librosa.db_to_amplitude(self._y, ref=np.max), **kwargs)
+                self._y = librosa.feature.inverse.mel_to_audio(librosa.db_to_amplitude(self._y), **kwargs)
             case "mfccs":
                 self._y = librosa.feature.inverse.mfcc_to_audio(self._y, **kwargs)
             
@@ -88,11 +88,11 @@ class AudioProcessingInterface:
     def log_spectrogram(self):
         return librosa.power_to_db(np.abs(librosa.stft(self._y)) ** 2, ref=np.max)
     
-    def mel_spectrogram(self, n_mels=128):
-        return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels)
+    def mel_spectrogram(self, n_mels=128, **kwargs):
+        return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels, **kwargs)
 
-    def log_mel_spectrogram(self, n_mels=128):
-        return librosa.power_to_db(self.mel_spectrogram(n_mels), ref=np.max)
+    def log_mel_spectrogram(self, n_mels=128, **kwargs):
+        return librosa.power_to_db(self.mel_spectrogram(n_mels, **kwargs), ref=np.max)
 
     def mfcc(self, n_mels=128, n_features=20, S=None):
         """

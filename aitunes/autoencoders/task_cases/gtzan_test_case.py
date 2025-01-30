@@ -30,7 +30,7 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
         self.test_loader = []
 
         self._download_dataset()
-        
+
         for label, files in read_labelled_folder(path.join(self._dataset_path, "genres_original"), ".wav").items():
             train_batch = files[:-5] if len(files) > 5 else files
             test_batch = files[-5:] if len(files) > 5 else files
@@ -51,13 +51,13 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
 
     def save_verification_extract(self, og, pred, embeds, labels, args):
         for i, label in enumerate(labels[0]):
-            og_item = np.reshape(og[i], (32, -1))
-            pred_item = np.reshape(pred[i], (32, -1))
+            og_item = np.reshape(og[i].cpu().numpy(), (32, -1))
+            pred_item = np.reshape(pred[i].cpu().numpy(), (32, -1))
             
-            p_i = AudioProcessingInterface.create_for(f"assets/Samples/generated/gtzan/generated_{i}.wav", mode="log_mel", data=pred_item.cpu().numpy())
+            p_i = AudioProcessingInterface.create_for(f"assets/Samples/generated/gtzan/generated_{i}.wav", mode="log_mel", sr=22050, data=pred_item)
             p_i.save(None).summary(qualifier=f"Prediction {i}")
             
-            og_i = AudioProcessingInterface.create_from_log_mel(f"assets/Samples/generated/gtzan/original_{i}.wav", mode="log_mel", data=og_item.cpu().numpy())
+            og_i = AudioProcessingInterface.create_for(f"assets/Samples/generated/gtzan/original_{i}.wav", mode="log_mel", sr=22050, data=og_item)
             og_i.save(None).summary(qualifier=f"Original {i}")
 
         a = input()
@@ -72,7 +72,7 @@ class GtzanDatasetTestCase(AutoencoderTaskCase):
         for i in range(0, len(dataset) // batch_size):
             items = dataset[i * batch_size:(i + 1) * batch_size]
             labels, file_paths = zip(*items)
-            preprocessed_audio_files = list(map(self._preprocessing_fn, file_paths))
+            preprocessed_audio_files = np.array(list(filter(lambda x: x is not None, map(self._preprocessing_fn, file_paths))))
             audio_data = torch.tensor(preprocessed_audio_files, dtype=torch.float32)
 
             if self._flatten:
