@@ -107,13 +107,15 @@ def example5(model_weights: str = "assets/models/cvae_gtzan.pth"):
     
     model = CVAE(
         input_shape=[1, *expected_input_size],
-        conv_filters=[1024, 512, 256, 128],
-        conv_kernels=[   3,   3,   3,   3],
-        conv_strides=[   1,   1,   1,   1],
+        conv_filters=[ 64, 128, 256],
+        conv_kernels=[  3,   3,   3],
+        conv_strides=[  2,   2,   2],
         latent_space_dim=16
     )
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     flags = FLAG_NONE
+
+    summary(model, (1, *expected_input_size))
 
     def path_to_trainable_audio(path: str):
         try:
@@ -137,9 +139,9 @@ def example5(model_weights: str = "assets/models/cvae_gtzan.pth"):
 def main(): 
     # example1()  # Vector3d VAE
     # example2()  # MNIST VAE
-    example3()  # MNIST CVAE
+    # example3()  # MNIST CVAE
     # example4()  # GTZAN VAE
-    # example5()  # GTZAN CVAE
+    example5()  # GTZAN CVAE
 
 if __name__ == "__main__":
     main()

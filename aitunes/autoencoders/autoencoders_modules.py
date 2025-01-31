@@ -111,7 +111,7 @@ class CVAE(nn.Module):
 
         # Couches convolutionnelles
         for out_channels, kernel_size, stride in zip(self.conv_filters, self.conv_kernels, self.conv_strides):
-            layers.append(nn.Conv2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size // 2))
+            layers.append(nn.Conv2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size//2))
             layers.append(nn.ReLU())  #non-linéarité
             layers.append(nn.BatchNorm2d(out_channels)) #Normalisation
             input_channels = out_channels
@@ -131,7 +131,8 @@ class CVAE(nn.Module):
             reversed(self.conv_kernels[:-1]),
             reversed(self.conv_strides[:-1])
         )):
-            layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size//2, output_padding=self.output_padding[-(i + 1)]))
+            print(self.output_padding[-i - 1])
+            layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size // 2, output_padding=self.output_padding[-i - 1]))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm2d(out_channels))
             input_channels = out_channels
@@ -147,12 +148,15 @@ class CVAE(nn.Module):
         """
         h, w = self.input_shape[1:]
         for kernel_size, stride in zip(self.conv_kernels, self.conv_strides):
+            expected_decoded_size = (h, w)
             padding = kernel_size // 2
-            h_save = h
+
             h = (h - kernel_size + 2 * padding) // stride + 1
             w = (w - kernel_size + 2 * padding) // stride + 1
-            h_in = (h - 1) * stride + kernel_size - 2 * padding
-            self.output_padding.append(h_save - h_in)
+
+            actual_decoded_size = (h - 1) * stride + kernel_size - 2 * padding, (w - 1) * stride + kernel_size - 2 * padding
+            self.output_padding.append((expected_decoded_size[0] - actual_decoded_size[0], expected_decoded_size[1] - actual_decoded_size[1]))
+    
         return (self.conv_filters[-1] * h * w, self.conv_filters[-1], h, w)
 
     def _encode(self, x):
