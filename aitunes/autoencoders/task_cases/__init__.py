@@ -1,7 +1,7 @@
 from .autoencoder_task_case import *
-from .mnist_digit_test_case import MnistDigitCompressionTestCase
-from .vector5d_test_case import LinearVectorAugmentationTestCase
-from .gtzan_test_case import GtzanDatasetTestCase
+from .mnist_digit_task_case import MnistDigitCompressionTaskCase
+from .vector5d_task_case import LinearVectorAugmentationTaskCase
+from .gtzan_task_case import GtzanDatasetTaskCase
 
 import matplotlib.pyplot as plt
 plt.ion()  # Enable multiple windows simultaneously

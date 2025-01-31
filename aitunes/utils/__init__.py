@@ -7,10 +7,12 @@ import os
 import time
 import string
 import zipfile
+import h5py
 import numpy as np
 import random
 import requests
 import torch
+import torch.nn.functional as F
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -103,3 +105,18 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
     finally:
         if clean:
             remove(zip_path)
+
+
+def save_dataset(path_to: str, name: str, values: np.ndarray, attrs: dict = {}):
+    with h5py.File(path_to, "w") as f:
+        f.create_dataset(name, data=values)
+        for key, val in attrs.items():
+            f.attrs[key] = val
+
+
+def simple_mse_kl_loss(prediction, target, mu, log_var, reconstruction_weight = 100):
+    log_var = torch.clamp(log_var, max = 10.0)  # Prevent against KL_Divergence explosion
+    reconstruction_loss = F.mse_loss(prediction, target)
+    KL_Divergence = torch.mean(-.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()))
+    return reconstruction_weight * reconstruction_loss + KL_Divergence
+    

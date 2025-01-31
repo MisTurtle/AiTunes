@@ -131,14 +131,14 @@ class CVAE(nn.Module):
             reversed(self.conv_kernels[:-1]),
             reversed(self.conv_strides[:-1])
         )):
-            print(self.output_padding[-i - 1])
             layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size // 2, output_padding=self.output_padding[-i - 1]))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm2d(out_channels))
             input_channels = out_channels
 
         layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=kernel_size//2, output_padding=self.output_padding[0]))
-        layers.append(nn.Sigmoid())
+        # layers.append(nn.Sigmoid())
+        layers.append(nn.ReLU())
         return nn.Sequential(*layers)
     
     def _calculate_shape_before_bottleneck(self):

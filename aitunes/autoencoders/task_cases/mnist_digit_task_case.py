@@ -11,7 +11,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
-class MnistDigitCompressionTestCase(AutoencoderTaskCase):
+class MnistDigitCompressionTaskCase(AutoencoderTaskCase):
 
     def __init__(self, model, weights_path, loss, optimizer, flatten: bool, flags: int = FLAG_NONE):
         super().__init__("MNIST Compression", model, weights_path, loss, optimizer, flags)

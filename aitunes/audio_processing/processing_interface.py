@@ -21,14 +21,14 @@ class AudioProcessingInterface:
     """
 
     @staticmethod
-    def create_for(path: str, mode: Literal["file", "wave", "spec", "mel", "log_mel", "mfccs"], **kwargs):
+    def create_for(path: str, mode: Literal["file", "wave", "log_spec", "mel", "log_mel", "mfccs"], **kwargs):
         """
         Create audio from a .wav file
         """
         return AudioProcessingInterface(path, mode, **kwargs)
 
 
-    def __init__(self, path: str, mode: Literal["file", "wave", "spec", "mel", "log_mel", "mfccs"], **kwargs):
+    def __init__(self, path: str, mode: Literal["file", "wave", "log_spec", "mel", "log_mel", "mfccs"], **kwargs):
         """
         :param path: Path to the .wav audio file
         :param sr: Sample rate for the WAV file, None means the audio isn't resampled
@@ -43,8 +43,9 @@ class AudioProcessingInterface:
                 self._y, self._sr = librosa.load(path, sr=self._sr)
             case "wave":
                 pass
-            case "spec":
-                self._y = librosa.griffinlim(self._y, **kwargs)
+            case "log_spec":
+                kwargs.pop("sr", None)
+                self._y = librosa.griffinlim(librosa.db_to_amplitude(self._y), **kwargs)
             case "mel":
                 self._y = librosa.feature.inverse.mel_to_audio(self._y, **kwargs)
             case "log_mel":
@@ -65,7 +66,7 @@ class AudioProcessingInterface:
     def get_data(self) -> tuple:
         return self._y, self._sr
     
-    def extract_window(self, duration: float, method: str = "random") -> 'AudioProcessingInterface':
+    def extract_window(self, duration: float, method: Literal["start", "end", "random", "bounded"] = "random", start: float = .0) -> 'AudioProcessingInterface':
         """
         Cuts the audio to a given duration
         :param duration: The target duration
@@ -77,16 +78,21 @@ class AudioProcessingInterface:
         
         match method:
             case "start":
-                self._y = self._y[:window_size]
+                y = self._y[:window_size]
             case "end":
-                self._y = self._y[-window_size:]
+                y = self._y[-window_size:]
+            case "bounded":
+                if start + window_size > self._y.shape[0]:
+                    y = self._y[-window_size:]
+                else:
+                    y = self._y[int(self._sr * start):int(self._sr * start) + window_size]
             case "random":
                 start = np.random.randint(0, self._y.shape[0] - window_size)
-                self._y = self._y[start:start+window_size]
-        return self
+                y = self._y[start:start+window_size]
+        return AudioProcessingInterface(self.get_path(), mode="wave", data=y, sr=self._sr)
 
-    def log_spectrogram(self):
-        return librosa.power_to_db(np.abs(librosa.stft(self._y)) ** 2, ref=np.max)
+    def log_spectrogram(self, **kwargs):
+        return librosa.amplitude_to_db(np.abs(librosa.stft(self._y, **kwargs)) ** 2, ref=np.max)
     
     def mel_spectrogram(self, n_mels=128, **kwargs):
         return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels, **kwargs)
@@ -179,7 +185,8 @@ class AudioProcessingInterface:
     def save(self, outpath: Union[str, None]) -> 'AudioProcessingInterface':
         if outpath is None:
             outpath = self.get_path()
-        makedirs(path.dirname(outpath), exist_ok=True)
+        if path.dirname(outpath) != "":
+            makedirs(path.dirname(outpath), exist_ok=True)
         sf.write(outpath, self._y, self._sr)
         return self
         

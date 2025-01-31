@@ -49,7 +49,7 @@ class TestPreprocessingCollection(unittest.TestCase):
         norm_max = 1.0
         original_min = 0
         original_max = 10
-        array = PreprocessingCollection.denormalise(norm_array, norm_min, norm_max, original_min, original_max)
+        array = PreprocessingCollection.denormalise(norm_array, original_min, original_max, norm_min=norm_min, norm_max=norm_max)
         
         print("Tableau normalisé:", norm_array)
         print("Tableau dénormalisé:", array)
