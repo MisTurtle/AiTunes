@@ -1,3 +1,5 @@
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Button
 from aitunes.utils import download_and_extract, read_labelled_folder
 from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE, Middleware
 from aitunes.audio_processing import AudioProcessingInterface
@@ -21,6 +23,12 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         self._flatten = flatten
         self.train_loader = training_data
         self.test_loader = evaluation_data
+        self.compare_audio = compare_audio
+
+        # Interactive evaluation variables
+        self._current_track = 0
+        self._ax, self._fig = None, None
+        self._i_og, self._i_rec = None, None
         
         self.add_middleware(compare_audio)
 
@@ -48,7 +56,63 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             current_index += batch_size
 
     def interactive_evaluation(self):
-        raise NotImplementedError
+        """
+        Inspired from https://matplotlib.org/stable/gallery/widgets/buttons.html
+        
+        Loops over validation data and show a comparison between the original audio and the reproduced one
+        Controls for playing audio and switching tracks is also available
+        """
+        with torch.no_grad():
+            # Create the plot
+            self._fig, self._ax = plt.subplots(figsize=(12, 5))
+            self._fig.subplots_adjust(bottom=0.25, top=0.85)
+            
+            # Create buttons
+            axplayog = self._fig.add_axes([0.59, 0.05, 0.1, 0.075])
+            axplayrec = self._fig.add_axes([0.48, 0.05, 0.1, 0.075])
+            axprev = self._fig.add_axes([0.7, 0.05, 0.1, 0.075])
+            axnext = self._fig.add_axes([0.81, 0.05, 0.1, 0.075])
+            bnext = Button(axnext, 'Next')
+            bnext.on_clicked(self.next_track)
+            bprev = Button(axprev, 'Previous')
+            bprev.on_clicked(self.prev_track)
+            bplayog = Button(axplayog, 'Play Original')
+            bplayog.on_clicked(lambda _: self._i_og.play())
+            bplayrec = Button(axplayrec, 'Play Generated')
+            bplayrec.on_clicked(lambda _: self._i_rec.play())
 
+            self.display_track()
+
+            self._fig.show()
+            while self._fig.waitforbuttonpress() == False:
+                continue
+
+    def display_track(self):
+        self._ax.clear()
+        # Load the spectrogram and its prediction
+        original_spectrogram = self.test_loader[self._current_track]
+        model_input = torch.tensor(original_spectrogram, dtype=torch.float32)
+        model_input = model_input.unsqueeze(0)
+
+        # Reshape the input
+        if self._flatten:
+            model_input = model_input.flatten(start_dim=1, end_dim=2)
+        else:
+            model_input = model_input.unsqueeze(1)
         
-        
+        latent, reconstructed_spectrogram, *args = self.model(model_input)
+        loss = self._loss_criterion(model_input, reconstructed_spectrogram, *args)
+
+        self._fig.suptitle(f"Comparing Evaluation Track #{self._current_track}\nLoss: {loss}")
+        # Fetch the audio processing interfaces from the middleware (not the cleanest but easier to implement)
+        self._i_og, self._i_rec = self.compare_audio(model_input, reconstructed_spectrogram, latent, [[self._current_track]], args)
+        self._i_og.compare_waves(self._i_rec, ax=self._ax)  # Draw the wave comparison
+
+
+    def next_track(self, _):
+        self._current_track = (self._current_track + 1) % self.test_loader.shape[0]
+        self.display_track()
+            
+    def prev_track(self, _):
+        self._current_track = (self._current_track - 1) % self.test_loader.shape[0]
+        self.display_track()

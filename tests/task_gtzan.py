@@ -17,17 +17,6 @@ from aitunes.autoencoders.autoencoders_modules import VariationalAutoEncoder, CV
 from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
 
 
-# Procedure to recreate audio from spectrogram:
-# og_i = AudioProcessingInterface.create_for("", mode="log_spec", data=y.copy(), sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-# og_i.save("og.wav").summary("Original")
-
-# normalized_spect = PreprocessingCollection.normalise(y, 0, 1)
-# pre_i = AudioProcessingInterface.create_for("", mode="log_spec", data=PreprocessingCollection.denormalise(normalized_spect, y.min(), y.max()), sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-# pre_i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, -0.8, 0.8))
-# pre_i.save("pre.wav").summary("Processed")
-# a = input()
-# return y
-
 # File system paths
 dataset_path = path.join("assets", "Samples", "GTZAN")
 audio_dataset_path = path.join(dataset_path, "genres_original")
@@ -138,28 +127,36 @@ def preprocess_spectrogram(y: np.ndarray):
 def reconstruct_audio(og: torch.Tensor, pred: torch.Tensor, embed: torch.Tensor, labels: list, _):
     """
     A middleware applied to verification data to save and compare audio between the original normalized spectrogram and the generated one
+    The last interfaces are returned for access from the interactive evaluation. It has no other purpose and isn't very clean tbh
     """
-    print("")
+    if og.shape[0] > 1:
+        print("")  # Console formatting
+
+    i1, i2 = None, None
     for k in range(og.shape[0]):
         spec_id = labels[0][k]
-        print(f"\r{get_loading_char()} Reconstructing audio #{str(spec_id).zfill(3)}...", end='')
+        if og.shape[0] > 1:
+            print(f"\r{get_loading_char()} Reconstructing audio #{str(spec_id).zfill(3)}...", end='')
 
         bounds = evaluation_h5_file["bounds"][spec_id]
         normalized_spect = og[k].reshape(expected_spectrogram_size).cpu().numpy()
         denormalized_spect = PreprocessingCollection.denormalise(normalized_spect, bounds[0], bounds[1])
 
-        i = AudioProcessingInterface.create_for(path.join(comparison_path, f"original_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-        i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-        i.save(None)
+        i1 = AudioProcessingInterface.create_for(path.join(comparison_path, f"original_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
+        i1.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
+        i1.save(None)
 
         normalized_spect = pred[k].reshape(expected_spectrogram_size).cpu().numpy()
         denormalized_spect = PreprocessingCollection.denormalise(normalized_spect, bounds[0], bounds[1])
-        i = AudioProcessingInterface.create_for(path.join(comparison_path, f"generated_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-        i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-        i.save(None)
+        i2 = AudioProcessingInterface.create_for(path.join(comparison_path, f"generated_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
+        i2.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
+        i2.save(None)
+    
+    return i1, i2
 
 
-def vae(interactive: bool = True):
+
+def vae(evaluate: bool = True, interactive: bool = True):
     model_path = path.join("assets", "Models", "vae_gtzan.pth")
     model = VariationalAutoEncoder((
         flat_expected_spectrogram_size,
@@ -172,8 +169,12 @@ def vae(interactive: bool = True):
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
 
     summary(model, (flat_expected_spectrogram_size, ))
-    task.train(epochs)
-    task.evaluate()
+    if not task.trained:
+        task.train(epochs)
+    if evaluate:
+        task.evaluate()
+    if interactive:
+        task.interactive_evaluation()
 
 
 def cvae(interactive: bool = True):
@@ -198,7 +199,7 @@ def cvae(interactive: bool = True):
 
 if __name__ == "__main__":
     initial_setup()
-    vae()
+    vae(evaluate=False)
     cvae()
     if training_h5_file is not None:
         training_h5_file.close()

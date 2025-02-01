@@ -16,13 +16,17 @@ if __name__ == '__main__':
         if path.isdir(path.join(samples_folder, filename)):
             continue
 
-        i = AudioProcessingInterface.create_for(path.join(samples_folder, filename), mode="file")
-        i.summary(n_mels=n_mels, mfcc_features=mfcc_features)
-        i.extract_window(5, method="start")
-        i.summary(qualifier="processed", n_mels=n_mels, mfcc_features=mfcc_features).save(path.join(output_folder, filename))
+        i = AudioProcessingInterface.create_for(path.join(samples_folder, filename), mode="file", label="Original")
+        i2 = i.extract_window(1., method="start", label="Cropped")
+        i3 = i.copy(label="Amplified").preprocess(lambda y: y * 1.2)
+        i.full_summary([i2, i3], n_mels=n_mels, mfcc_features=mfcc_features, headless=False).save(path.join(output_folder, filename))
+        
+        fig, ax = i.compare_waves(i2, i3)
+        ax.set(title="Fullscreen wave comparison")
+        fig.show()
+        fig.waitforbuttonpress()
 
-        i.reconstruct_from_mel(n_mels=n_mels).save(path.join(output_folder, "from_mel_" + filename))
-        i.reconstruct_from_mfcc(n_mels=n_mels, mfcc_features=mfcc_features).save(path.join(output_folder, "from_mfcc_" + filename))
+        i2.reconstruct_from_mel(n_mels=n_mels).save(path.join(output_folder, "from_mel_" + filename))
+        i2.reconstruct_from_mfcc(n_mels=n_mels, mfcc_features=mfcc_features).save(path.join(output_folder, "from_mfcc_" + filename))
 
-    plt.waitforbuttonpress()
-    plt.close('all')
+        plt.close('all')
