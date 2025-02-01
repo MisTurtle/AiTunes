@@ -3,3 +3,4 @@
 assets/Samples/
 assets/Resources/
 .vscode/
+assets/Models/*_gtzan.pth

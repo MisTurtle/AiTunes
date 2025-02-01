@@ -107,9 +107,10 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
             remove(zip_path)
 
 
-def save_dataset(path_to: str, name: str, values: np.ndarray, attrs: dict = {}):
+def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
     with h5py.File(path_to, "w") as f:
-        f.create_dataset(name, data=values)
+        for name, values in datasets.items():
+            f.create_dataset(name, data=values)
         for key, val in attrs.items():
             f.attrs[key] = val
 

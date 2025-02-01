@@ -229,5 +229,7 @@ class AutoencoderTaskCase(ABC):
         """
         Starts an interactive interface where the user can interact and see the live results
         /!\\ Do not forget to disable training mode (For performance) /!\\
+        
+        TODO : See to use a decorator to remove boilerplate for individual tasks?
         """
         pass
