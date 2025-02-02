@@ -124,36 +124,37 @@ def preprocess_spectrogram(y: np.ndarray):
     """
     return PreprocessingCollection.normalise(y, 0, 1)
 
-def reconstruct_audio(og: torch.Tensor, pred: torch.Tensor, embed: torch.Tensor, labels: list, _):
+def save_model_prediction(og: torch.Tensor, pred: torch.Tensor, embed: torch.Tensor, labels: list, _):
     """
     A middleware applied to verification data to save and compare audio between the original normalized spectrogram and the generated one
-    The last interfaces are returned for access from the interactive evaluation. It has no other purpose and isn't very clean tbh
     """
-    if og.shape[0] > 1:
-        print("")  # Console formatting
+    print("")  # Console formatting
 
-    i1, i2 = None, None
     for k in range(og.shape[0]):
         spec_id = labels[0][k]
-        if og.shape[0] > 1:
-            print(f"\r{get_loading_char()} Reconstructing audio #{str(spec_id).zfill(3)}...", end='')
+        print(f"\r{get_loading_char()} Reconstructing audio #{str(spec_id).zfill(3)}...", end='')
 
+        normalized_spect = og[k]
+        reconstruct_audio(normalized_spect, spec_id).save(path.join(comparison_path, f"original_{spec_id}.wav"))
+        normalized_spect = pred[k]
+        reconstruct_audio(normalized_spect, spec_id).save(path.join(comparison_path, f"generated_{spec_id}.wav"))
+
+
+def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1) -> AudioProcessingInterface:
+    if spec_id < 0:
+        bounds = spec_bounds
+    else:
         bounds = evaluation_h5_file["bounds"][spec_id]
-        normalized_spect = og[k].reshape(expected_spectrogram_size).cpu().numpy()
-        denormalized_spect = PreprocessingCollection.denormalise(normalized_spect, bounds[0], bounds[1])
 
-        i1 = AudioProcessingInterface.create_for(path.join(comparison_path, f"original_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-        i1.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-        i1.save(None)
+    normalized_spectrogram = normalized_spectrogram.reshape(expected_spectrogram_size)
+    denormalized_spect = PreprocessingCollection.denormalise(normalized_spectrogram, bounds[0], bounds[1])
 
-        normalized_spect = pred[k].reshape(expected_spectrogram_size).cpu().numpy()
-        denormalized_spect = PreprocessingCollection.denormalise(normalized_spect, bounds[0], bounds[1])
-        i2 = AudioProcessingInterface.create_for(path.join(comparison_path, f"generated_{spec_id}.wav"), mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-        i2.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-        i2.save(None)
-    
-    return i1, i2
+    if isinstance(denormalized_spect, torch.Tensor):
+        denormalized_spect = denormalized_spect.cpu().numpy()
 
+    i = AudioProcessingInterface.create_for("", mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
+    i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
+    return i
 
 
 def vae(evaluate: bool = True, interactive: bool = True):
@@ -167,6 +168,7 @@ def vae(evaluate: bool = True, interactive: bool = True):
     ))
     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.001)
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
+    task.add_middleware(save_model_prediction)
 
     summary(model, (flat_expected_spectrogram_size, ))
     if not task.trained:
