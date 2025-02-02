@@ -1,8 +1,10 @@
 from typing import Union
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 from matplotlib.widgets import Button
+from aitunes.audio_processing.preprocessing_collection import PreprocessingCollection
 from aitunes.audio_processing.processing_interface import AudioProcessingInterface
-from aitunes.utils import device
+from aitunes.utils import device, normalize
 from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
 
 import h5py
@@ -21,7 +23,9 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         super().__init__("GTZAN", model, weights_path, loss, optimizer, flags)
         self._flatten = flatten
         self.train_loader = training_data
+        self.training_indices = np.arange(len(self.train_loader))
         self.test_loader = evaluation_data
+        self.test_indices = np.arange(len(self.test_loader))
         self.reconstruct_audio = reconstruct_audio
 
         # Interactive evaluation variables
@@ -33,18 +37,25 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         self._latent_space_size = None  # Computed during interactive validation for now
 
     def next_batch(self, training): 
-        dataset = self.train_loader
         if not training:
             dataset = self.test_loader
+            np.random.shuffle(self.test_indices)
+            indices = self.test_indices
+        else:
+            dataset = self.train_loader
+            np.random.shuffle(self.training_indices)
+            indices = self.training_indices
         
         complete = False
-        batch_size, current_index = 50, 0
+        batch_size, current_index = 100, 0
         while not complete:
             if current_index + batch_size >= dataset.shape[0]:
-                spectrograms = dataset[current_index:]
+                batch_indices = indices[current_index:]
                 complete = True
             else:
-                spectrograms = dataset[current_index:current_index + batch_size]
+                batch_indices = indices[current_index:current_index + batch_size]
+            batch_indices = np.sort(batch_indices)
+            spectrograms = dataset[batch_indices]
             spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
 
             if self._flatten:
@@ -52,7 +63,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             else:
                 spectrograms = spectrograms.unsqueeze(1)
 
-            yield spectrograms, np.arange(current_index, current_index + spectrograms.shape[0])  # No real labels passed, but ids to the spectrograms.
+            yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
             current_index += batch_size
 
     def interactive_evaluation(self):
@@ -64,16 +75,24 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         """
         with torch.no_grad():
             # Create the plot
-            self._fig, self._axes = plt.subplots(ncols=2, figsize=(12, 5), width_ratios=(3, 1))
-            self._fig.subplots_adjust(bottom=0.25, top=0.85)
+            plt.switch_backend("TkAgg")
+            self._fig = plt.figure(figsize=(14, 8.5))
+            gs = GridSpec(nrows=3, ncols=2, width_ratios=[1, 1], height_ratios=[1, 1, 1])
+            self._axes = [
+                self._fig.add_subplot(gs[0, :]),  # Wave form plot
+                self._fig.add_subplot(gs[1, 0]),  # Original spectrogram
+                self._fig.add_subplot(gs[1, 1]),  # Reconstructed spectrogram
+                self._fig.add_subplot(gs[2, :])   # Latent space bar plot
+            ]
+            self._fig.subplots_adjust(bottom=0.09, top=0.925)
             
             # Create buttons
-            axgenerate = self._fig.add_axes([0.26, 0.05, 0.1, 0.075])
-            axreload = self._fig.add_axes([0.37, 0.05, 0.1, 0.075])
-            axplayrec = self._fig.add_axes([0.48, 0.05, 0.1, 0.075])
-            axplayog = self._fig.add_axes([0.59, 0.05, 0.1, 0.075])
-            axprev = self._fig.add_axes([0.7, 0.05, 0.1, 0.075])
-            axnext = self._fig.add_axes([0.81, 0.05, 0.1, 0.075])
+            axgenerate  = self._fig.add_axes([0.10, 0.025, 0.08, 0.03])
+            axreload    = self._fig.add_axes([0.19, 0.025, 0.08, 0.03])
+            axplayrec   = self._fig.add_axes([0.42, 0.025, 0.08, 0.03])
+            axplayog    = self._fig.add_axes([0.51, 0.025, 0.08, 0.03])
+            axprev      = self._fig.add_axes([0.73, 0.025, 0.08, 0.03])
+            axnext      = self._fig.add_axes([0.82, 0.025, 0.08, 0.03])
 
             bnext = Button(axnext, 'Next')
             bnext.on_clicked(self.next_track)
@@ -88,7 +107,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             bgenerate = Button(axgenerate, 'Create Track')
             bgenerate.on_clicked(lambda _: self.generate_track())
 
-            self.display_track()
+            self.display_track(colorbar=True)
 
             self._fig.show()
             while self._fig.waitforbuttonpress() == False:
@@ -97,10 +116,10 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
     def generate_track(self):
         if self._latent_space_size is None:
             return  # Latent space size hasn't been computed yet, which shouldn't happen as it is computed right when we enter interactive mode
-        self._generated_sample = torch.from_numpy(np.random.randn(self._latent_space_size).astype(np.float32)).to(device)
+        self._generated_sample = torch.from_numpy(PreprocessingCollection.normalise(np.random.randn(self._latent_space_size).astype(np.float32), -1, 1)).to(device)
         self.display_track()
 
-    def display_track(self, _=None):
+    def display_track(self, _=None, colorbar=False):
         for ax in self._axes:
             ax.clear()
         
@@ -119,24 +138,31 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             # Evaluate and predict the reconstructed spectrogram
             latent, reconstructed_spectrogram, *args = self.model(model_input)
             loss = self._loss_criterion(model_input, reconstructed_spectrogram, *args)
-            self._fig.suptitle(f"Comparing Evaluation Track #{self._current_track}\nLoss: {loss}")
+            self._fig.suptitle(f"Comparing Evaluation Track #{self._current_track}  //  Loss: {loss:.3f}")
 
             # Fetch the audio processing interfaces from the middleware (not the cleanest but easier to implement)
-            self._i_og = self.reconstruct_audio(original_spectrogram, self._current_track)
-            self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, self._current_track)
+            self._i_og = self.reconstruct_audio(original_spectrogram, self._current_track, label="Original")
+            self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, self._current_track, label="Reconstructed")
             self._i_og.compare_waves(self._i_rec, ax=self._axes[0])  # Draw the wave comparison
+            # Plot spectrograms
+            self._i_og.get_plot_for(['log_spec'], title="Original Spectrogram", axes=self._axes[1], fig=self._fig, colorbar=colorbar)
+            self._i_rec.get_plot_for(['log_spec'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
+            # Save latent space size
             self._latent_space_size = int(latent.shape[1])
             latent = latent[0]
         else:
             latent = self._generated_sample
-            reconstructed_spectrogram = self.model._decoder(latent)
-            self._i_og = self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, -1)
+            reconstructed_spectrogram = self.model._decoder(latent.unsqueeze(0))
+            self._i_og = self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, -1, label="Generated")
             self._fig.suptitle("Randomly generated track")
-            self._i_og.draw_wave(self._axes[0])
-
+            self._i_rec.draw_wave(self._axes[0])
+            self._i_rec.get_plot_for(['log_spec'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
+            self._axes[1].set_facecolor('lightgray')
+            self._axes[1].text(0.5, 0.5, 'Nothing to Show', fontsize=16, color='black', ha='center', va='center', bbox=dict(facecolor='white', alpha=0.8, edgecolor='black'))
+            
         # Plot the latent space
-        self._axes[1].title.set_text("Latent Space State")
-        self._axes[1].bar(np.arange(0, self._latent_space_size), latent.cpu().tolist())
+        self._axes[3].title.set_text("Latent Space State")
+        self._axes[3].bar(np.arange(0, self._latent_space_size), latent.cpu().tolist())
 
     def next_track(self, _):
         self._generated_sample = None

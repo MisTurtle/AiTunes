@@ -134,8 +134,9 @@ class AudioProcessingInterface:
     def get_plot_for(
             self,
             features: list[Literal["wave", "log_spec", "log_mel", "mfcc", "empty"]],
-            suptitle: Union[str, None] = "Summary",
+            suptitle: Union[str, None] = None,
             title: Union[None, str, list[str]] = None,
+            colorbar: Union[None, bool, list[bool]] = None,
             wave_color: str = "b",
             wave_alpha: float = 1.,
             axes=None,
@@ -154,10 +155,15 @@ class AudioProcessingInterface:
             if not isinstance(axes, np.ndarray):
                 axes = [axes]
         
-        plt.suptitle(suptitle)
+        if suptitle is not None:
+            plt.suptitle(suptitle)
+
         if title is None or isinstance(title, str):
             title = [title] * len(features)
-        
+
+        if colorbar is None or isinstance(colorbar, bool):
+            colorbar = [True if colorbar is None else colorbar] * len(features)
+
         for i in range(len(features)):
             match features[i]:
                 case "wave":
@@ -165,19 +171,21 @@ class AudioProcessingInterface:
                 case "log_spec":
                     spec = self.log_spectrogram()
                     spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='log', ax=axes[i])
-                    plt.colorbar(spec_img, label="dB", ax=axes[i])
+                    if colorbar[i]:
+                        plt.colorbar(spec_img, label="dB", ax=axes[i])
                     axes[i].set(title=title[i] or "Log Spectrogram")
                 case "log_mel":
                     spec = self.log_mel_spectrogram(n_mels=n_mels)
                     spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='mel', ax=axes[i])
-                    plt.colorbar(spec_img, label="dB", ax=axes[i])
+                    if colorbar[i]:
+                        plt.colorbar(spec_img, label="dB", ax=axes[i])
                     axes[i].set(title=title[i] or "Log Mel Spectrogram")
                 case "mfcc":
                     mfcc = self.mfcc(n_features=mfcc_features)
                     mfcc_img = librosa.display.specshow(mfcc, sr=self._sr, x_axis='time', ax=axes[i])
-                    plt.colorbar(mfcc_img, label="MFCC", ax=axes[i])
+                    if colorbar[i]:
+                        plt.colorbar(mfcc_img, label="MFCC", ax=axes[i])
                     axes[i].set(title=title[i] or "MFCC Features")
-        
         return fig, axes
     
     def draw_wave(self, ax, color: str = 'b', alpha: float = 1.0, label: Union[str, None] = None):

@@ -1,4 +1,5 @@
 
+from typing import Union
 import autoloader
 import random
 import h5py
@@ -27,11 +28,12 @@ makedirs(comparison_path, exist_ok=True)
 
 # Audio and model variables
 flags = FLAG_NONE
-epochs = 1000
-n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 1024, 512, 1., 22050, 2
+# epochs = 1000
+epochs = 20
+n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 1024, 512, 1., 22050, 10
 expected_spectrogram_size = int(n_fft // 2) + 1, int(sample_duration * sample_rate // hop_length) + 1
 flat_expected_spectrogram_size = expected_spectrogram_size[0] * expected_spectrogram_size[1]
-dB_bounds = -0.5, 0.5  # Spectrograms are mapped to this range once audio is recreated. Can be fine tuned later on
+dB_bounds = -0.8, 0.8  # Spectrograms are mapped to this range once audio is recreated. Can be fine tuned later on
 spec_bounds = -80, 0  # Bounds used to reconstruct audio from a normalized spectrogram. -80db to 0db
 
 # H5 file instances
@@ -140,7 +142,7 @@ def save_model_prediction(og: torch.Tensor, pred: torch.Tensor, embed: torch.Ten
         reconstruct_audio(normalized_spect, spec_id).save(path.join(comparison_path, f"generated_{spec_id}.wav"))
 
 
-def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1) -> AudioProcessingInterface:
+def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1, label: Union[str, None] = None) -> AudioProcessingInterface:
     if spec_id < 0:
         bounds = spec_bounds
     else:
@@ -152,7 +154,7 @@ def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1) -
     if isinstance(denormalized_spect, torch.Tensor):
         denormalized_spect = denormalized_spect.cpu().numpy()
 
-    i = AudioProcessingInterface.create_for("", mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
+    i = AudioProcessingInterface.create_for("", mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length, label=label or f"Audio #{spec_id}")
     i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
     return i
 
@@ -179,30 +181,32 @@ def vae(evaluate: bool = True, interactive: bool = True):
         task.interactive_evaluation()
 
 
-def cvae(interactive: bool = True):
-    pass
-    # TODO.
-    # model_path = path.join("assets", "Models", "cvae_mnist.pth")
-    # model = CVAE(
-    #     input_shape=[1, 28, 28],
-    #     conv_filters=[32, 64, 128],
-    #     conv_kernels=[ 3,  3,  3],
-    #     conv_strides=[ 2,  2,  2],
-    #     latent_space_dim=2
-    # )
-    # summary(model, (1, 28, 28))
-    # loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
-    # task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
-    
-    # if not task.trained:
-    #     task.train(epochs)
-    # task.evaluate()
+def cvae(evaluate: bool = True, interactive: bool = True):
+    model_path = path.join("assets", "Models", "cvae_gtzan.pth")
+    model = CVAE(
+        input_shape=[1, *expected_spectrogram_size],
+        conv_filters=[32, 64, 128, 256, 512, 1024],
+        conv_kernels=[ 3,  3,   3,   3,   3,    3],
+        conv_strides=[ 2,  2,   2,   2,   2,    2],
+        latent_space_dim=256
+    )
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.0001)
+    task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
+    task.add_middleware(save_model_prediction)
+
+    summary(model, (1, *expected_spectrogram_size))
+    if not task.trained:
+        task.train(epochs)
+    if evaluate:
+        task.evaluate()
+    if interactive:
+        task.interactive_evaluation()
 
 
 if __name__ == "__main__":
     initial_setup()
-    vae(evaluate=False)
-    cvae()
+    # vae(evaluate=False)
+    cvae(evaluate=False)
     if training_h5_file is not None:
         training_h5_file.close()
     if evaluation_h5_file is not None:
