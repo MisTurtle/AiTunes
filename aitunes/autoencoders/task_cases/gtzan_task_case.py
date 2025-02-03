@@ -47,7 +47,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             indices = self.training_indices
         
         complete = False
-        batch_size, current_index = 100, 0
+        batch_size, current_index = 32, 0
         while not complete:
             if current_index + batch_size >= dataset.shape[0]:
                 batch_indices = indices[current_index:]

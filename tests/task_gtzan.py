@@ -185,12 +185,12 @@ def cvae(evaluate: bool = True, interactive: bool = True):
     model_path = path.join("assets", "Models", "cvae_gtzan.pth")
     model = CVAE(
         input_shape=[1, *expected_spectrogram_size],
-        conv_filters=[32, 64, 128, 256, 512, 1024],
-        conv_kernels=[ 3,  3,   3,   3,   3,    3],
-        conv_strides=[ 2,  2,   2,   2,   2,    2],
-        latent_space_dim=256
+        conv_filters=[32, 64, 128, 256, 512],
+        conv_kernels=[ 3,  3,   3,   3,   5],
+        conv_strides=[ (2, 1),  (2, 1),   5,   2,   2],
+        latent_space_dim=128
     )
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.0001)
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.0005)
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
     task.add_middleware(save_model_prediction)
 

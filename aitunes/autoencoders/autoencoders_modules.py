@@ -93,9 +93,9 @@ class CVAE(nn.Module):
         self.input_shape = input_shape  # Data input shape (channels, height, width)
         self.conv_filters = conv_filters  # Number of channels to output after each layer
         self.conv_kernels = conv_kernels  # Convolutional kernel size
-        self.conv_strides = conv_strides  # How much to move the kernel after each iteration
+        self.conv_strides = list(map(lambda x: x if isinstance(x, tuple) else (x, x), conv_strides))  # How much to move the kernel after each iteration
         self.latent_space_dim = latent_space_dim  # To which dimension is the data compressed
-        self.output_padding = []  # Padding to apply on ConvTranspose2d to consistently obtain an output the same size as the input (Because different input sizes produce the same output size)
+        self.shape_at_i = []  # Padding to apply on ConvTranspose2d to consistently obtain an output the same size as the input (Because different input sizes produce the same output size)
         self._shape_before_bottleneck = self._calculate_shape_before_bottleneck()
         
         # Encoder and Decoder
@@ -126,38 +126,47 @@ class CVAE(nn.Module):
         layers.append(nn.Unflatten(1, self._shape_before_bottleneck[1:]))
 
         input_channels = self.conv_filters[-1]
-        for i, (out_channels, kernel_size, stride) in enumerate(zip(
-            reversed(self.conv_filters[:-1]),
-            reversed(self.conv_kernels[:-1]),
-            reversed(self.conv_strides[:-1])
-        )):
-            layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size // 2, output_padding=self.output_padding[-i - 1]))
+        for i in range(len(self.conv_filters) - 1, 0, -1):
+            out_channels, kernel_size, stride = self.conv_filters[i - 1], self.conv_kernels[i], self.conv_strides[i]
+            padding = kernel_size // 2
+
+            # Source: https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html
+            h_in, w_in = self.shape_at_i[i]
+            h_out = (h_in - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
+            w_out = (w_in - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
+            h_out_target, w_out_target = self.shape_at_i[i - 1]
+            p_h, p_w = h_out_target - h_out, w_out_target - w_out
+            # Do not remove the following, in case things break again ;-;
+            # print(f"Shape before {i} convolution should be {self.shape_at_i[i]}")
+            # print("Output size:", h_out, w_out)
+            # print("Target output size:", h_out_target, w_out_target)
+
+            layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=padding, output_padding=(p_h, p_w)))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm2d(out_channels))
             input_channels = out_channels
 
-        layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=kernel_size//2, output_padding=self.output_padding[0]))
+        layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=self.conv_kernels[0] // 2))
         # layers.append(nn.Sigmoid())
         layers.append(nn.ReLU())
         return nn.Sequential(*layers)
     
     def _calculate_shape_before_bottleneck(self):
         """
-        Calcule les dimensions exactes avant la couche de goulot d'étranglement.
-        TODO Note: This is struggling (=broken) for strides above 2, which is a pain.
+        Calcule les dimensions exactes avant la couche de goulot d'étranglement, et la taille attendue pour chaque convolution inverse (pour calcul du padding)
         """
         h, w = self.input_shape[1:]
+        
         for kernel_size, stride in zip(self.conv_kernels, self.conv_strides):
-            expected_decoded_size = (h, w)
+            # Compute the output size from the conv layer
             padding = kernel_size // 2
+            h = (h + 2 * padding - kernel_size) // stride[0] + 1
+            w = (w + 2 * padding - kernel_size) // stride[1] + 1
 
-            h = (h - kernel_size + 2 * padding) // stride + 1
-            w = (w - kernel_size + 2 * padding) // stride + 1
-
-            actual_decoded_size = (h - 1) * stride + kernel_size - 2 * padding, (w - 1) * stride + kernel_size - 2 * padding
-            self.output_padding.append((expected_decoded_size[0] - actual_decoded_size[0], expected_decoded_size[1] - actual_decoded_size[1]))
-    
-        return (self.conv_filters[-1] * h * w, self.conv_filters[-1], h, w)
+            self.shape_at_i.append((h, w))
+        
+        flattened_size = self.conv_filters[-1] * h * w
+        return (flattened_size, self.conv_filters[-1], h, w)
 
     def _encode(self, x):
         x = self._encoder(x)
