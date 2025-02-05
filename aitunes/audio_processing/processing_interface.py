@@ -48,11 +48,12 @@ class AudioProcessingInterface:
                 pass
             case "log_spec":
                 kwargs.pop("sr", None)
+                kwargs.pop("n_mels", None)
                 self._y = librosa.griffinlim(librosa.db_to_amplitude(self._y), **kwargs)
             case "mel":
                 self._y = librosa.feature.inverse.mel_to_audio(self._y, **kwargs)
             case "log_mel":
-                self._y = librosa.feature.inverse.mel_to_audio(librosa.db_to_amplitude(self._y), **kwargs)
+                self._y = librosa.feature.inverse.mel_to_audio(librosa.db_to_power(self._y), **kwargs)
             case "mfccs":
                 self._y = librosa.feature.inverse.mfcc_to_audio(self._y, **kwargs)
             
@@ -257,8 +258,10 @@ class AudioProcessingInterface:
     
     # Play the audio
     
-    def play(self, speed: float = 1.0):
+    def play(self, speed: float = 1.0, blocking: bool = False):
         sd.play(self._y, self._sr * speed)
+        if blocking:
+            sd.wait()
 
     # File operations
 

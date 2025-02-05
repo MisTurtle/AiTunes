@@ -108,6 +108,7 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
 
 
 def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
+    makedirs(path.dirname(path_to), exist_ok=True)
     with h5py.File(path_to, "w") as f:
         for name, values in datasets.items():
             f.create_dataset(name, data=values)

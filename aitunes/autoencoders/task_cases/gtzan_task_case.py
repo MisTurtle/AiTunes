@@ -145,8 +145,8 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, self._current_track, label="Reconstructed")
             self._i_og.compare_waves(self._i_rec, ax=self._axes[0])  # Draw the wave comparison
             # Plot spectrograms
-            self._i_og.get_plot_for(['log_spec'], title="Original Spectrogram", axes=self._axes[1], fig=self._fig, colorbar=colorbar)
-            self._i_rec.get_plot_for(['log_spec'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
+            self._i_og.get_plot_for(['log_mel'], title="Original Spectrogram", axes=self._axes[1], fig=self._fig, colorbar=colorbar)
+            self._i_rec.get_plot_for(['log_mel'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
             # Save latent space size
             self._latent_space_size = int(latent.shape[1])
             latent = latent[0]
@@ -156,7 +156,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             self._i_og = self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, -1, label="Generated")
             self._fig.suptitle("Randomly generated track")
             self._i_rec.draw_wave(self._axes[0])
-            self._i_rec.get_plot_for(['log_spec'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
+            self._i_rec.get_plot_for(['log_mel'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
             self._axes[1].set_facecolor('lightgray')
             self._axes[1].text(0.5, 0.5, 'Nothing to Show', fontsize=16, color='black', ha='center', va='center', bbox=dict(facecolor='white', alpha=0.8, edgecolor='black'))
             

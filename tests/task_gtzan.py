@@ -1,5 +1,5 @@
 
-from typing import Union
+from typing import Literal, Union
 import autoloader
 import random
 import h5py
@@ -21,19 +21,36 @@ from aitunes.audio_processing import AudioProcessingInterface, PreprocessingColl
 # File system paths
 dataset_path = path.join("assets", "Samples", "GTZAN")
 audio_dataset_path = path.join(dataset_path, "genres_original")
-precomputed_spectrograms_path = path.join(dataset_path, "spectrograms")
-training_set_path, evaluation_set_path = path.join(precomputed_spectrograms_path, "training_set.h5"), path.join(precomputed_spectrograms_path, "evaluation_set.h5")
+
+# -- For log spectrograms
+log_precomputed_spectrograms_path = path.join(dataset_path, "spectrograms")
+log_training_set_path, log_evaluation_set_path = path.join(log_precomputed_spectrograms_path, "training_set.h5"), path.join(log_precomputed_spectrograms_path, "evaluation_set.h5")
+
+# -- For log mel spectrograms
+mel_precomputed_spectrograms_path = path.join(dataset_path, "mel_spectrograms")
+mel_training_set_path, mel_evaluation_set_path = path.join(mel_precomputed_spectrograms_path, "training_set.h5"), path.join(mel_precomputed_spectrograms_path, "evaluation_set.h5")
+
+# -- Constant accross
 comparison_path = path.join("assets", "Samples", "generated", "gtzan")
 makedirs(comparison_path, exist_ok=True)
 
 # Audio and model variables
 flags = FLAG_NONE
-epochs = 250
+epochs = 200
 
-n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 1024, 512, 1., 22050, 10
-expected_spectrogram_size = int(n_fft // 2) + 1, int(sample_duration * sample_rate // hop_length) + 1
-flat_expected_spectrogram_size = expected_spectrogram_size[0] * expected_spectrogram_size[1]
-dB_bounds = -0.8, 0.8  # Spectrograms are mapped to this range once audio is recreated. Can be fine tuned later on
+# Features settings for each mode
+n_mels, n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 128, 1024, 512, 1., 22050, 5
+
+log_expected_spectrogram_size = int(n_fft // 2) + 1, int(sample_duration * sample_rate // hop_length) + 1
+log_flat_expected_spectrogram_size = log_expected_spectrogram_size[0] * log_expected_spectrogram_size[1]
+
+mel_expected_spectrogram_size = n_mels, int(sample_duration * sample_rate // hop_length) + 1
+mel_flat_expected_spectrogram_size = mel_expected_spectrogram_size[0] * mel_expected_spectrogram_size[1]
+
+# Directly usable settings (Mapped to the right value when switching modes)
+expected_spectrogram_size, flat_expected_spectrogram_size = log_expected_spectrogram_size, mel_expected_spectrogram_size
+creation_mode = "log_spec"
+dB_bounds = -0.7, 0.7  # Spectrograms are mapped to this range once audio is recreated. Can be fine tuned later on
 spec_bounds = -80, 0  # Bounds used to reconstruct audio from a normalized spectrogram. -80db to 0db
 
 # H5 file instances
@@ -42,6 +59,20 @@ training_h5_file, evaluation_h5_file = None, None
 # Save and history paths
 release_root = path.join("assets", "Models", "gtzan")
 history_root = path.join("history", "gtzan")
+
+
+def switch_mode(mode: Literal["log", "mel"]):
+    global training_h5_file, evaluation_h5_file, expected_spectrogram_size, flat_expected_spectrogram_size, creation_mode
+    match mode:
+        case "log":
+            training_h5_file, evaluation_h5_file = h5py.File(log_training_set_path, "r+"), h5py.File(log_evaluation_set_path, "r+")
+            expected_spectrogram_size, flat_expected_spectrogram_size = log_expected_spectrogram_size, flat_expected_spectrogram_size
+            creation_mode = "log_spec"
+        case "mel":
+            training_h5_file, evaluation_h5_file = h5py.File(mel_training_set_path, "r+"), h5py.File(mel_evaluation_set_path, "r+")
+            expected_spectrogram_size, flat_expected_spectrogram_size = mel_expected_spectrogram_size, mel_flat_expected_spectrogram_size
+            creation_mode = "log_mel"
+    print(f"/!\\ Mode switched to `{mode}`")
 
 
 def initial_setup():
@@ -57,16 +88,17 @@ def initial_setup():
     )
 
     # Check if spectrograms have been precomputed
-    if not path.exists(training_set_path) or not path.exists(evaluation_set_path):
+    if not all(map(lambda x: path.exists(x), [log_training_set_path, log_evaluation_set_path, mel_training_set_path, mel_evaluation_set_path])):
         evaluation_data_size = 10 * sample_per_item  # (1000 items in the dataset, 100 used for evaluation)
-        makedirs(precomputed_spectrograms_path, exist_ok=True)
-        all_spectrograms, all_bounds = [], []
+        all_spectrograms, all_bounds, all_mel_spectrograms, all_mel_bounds = [], [], [], []
         for root, _, files in walk(audio_dataset_path):
             for filename in files:  # Loop over audio files in the dataset
                 print(f"\r{get_loading_char()} Precomputing {filename}..." + " " * 10, end='')
-                spectrograms, bounds = preprocess(path.join(root, filename))
+                spectrograms, bounds, mel_spectrograms, mel_bounds = preprocess(path.join(root, filename))
                 all_spectrograms += spectrograms
                 all_bounds += bounds
+                all_mel_spectrograms += mel_spectrograms
+                all_mel_bounds += mel_bounds
         
         print("\rSpectrograms precomputed. Saving as HDF5 datasets...")
         # attrs = {"n_fft": n_fft, "hop_length": hop_length, "sample_duration": sample_duration, "sample_rate": sample_rate}  # Might be useful to store those? Meh maybe not
@@ -75,19 +107,30 @@ def initial_setup():
         random.shuffle(all_data)
         all_spectrograms, all_bounds = zip(*all_data)
 
-        save_dataset(training_set_path, {
+        all_data = list(zip(all_mel_spectrograms, all_mel_bounds))
+        random.shuffle(all_data)
+        all_mel_spectrograms, all_mel_bounds = zip(*all_data)
+
+        # Save all 4 datasets
+        save_dataset(log_training_set_path, {
             "spectrograms": np.array(all_spectrograms[evaluation_data_size:]),
             "bounds": np.array(all_bounds[evaluation_data_size:])
         }, attrs={})
-        save_dataset(evaluation_set_path, {
+        save_dataset(log_evaluation_set_path, {
             "spectrograms": np.array(all_spectrograms[:evaluation_data_size]),
             "bounds": np.array(all_bounds[:evaluation_data_size])
         }, attrs={})
+        save_dataset(mel_training_set_path, {
+            "spectrograms": np.array(all_mel_spectrograms[evaluation_data_size:]),
+            "bounds": np.array(all_mel_bounds[evaluation_data_size:])
+        }, attrs={})
+        save_dataset(mel_evaluation_set_path, {
+            "spectrograms": np.array(all_mel_spectrograms[:evaluation_data_size]),
+            "bounds": np.array(all_mel_bounds[:evaluation_data_size])
+        }, attrs={})
     else:
-        print(f"Precomputed spectrograms found at {precomputed_spectrograms_path}")
+        print(f"Precomputed spectrograms found at {log_precomputed_spectrograms_path}")
     
-    training_h5_file, evaluation_h5_file = h5py.File(training_set_path, "r+"), h5py.File(evaluation_set_path, "r+")
-
 
 def preprocess(audio_path: str):
     """
@@ -95,7 +138,7 @@ def preprocess(audio_path: str):
     :param path: Path to the .wav file
     """
     # Saving bounds seems actually kind of useless as every file in the dataset is normalized to [-80, 0] dB. But at least the system is in place for future expansion if necessary 
-    spectrograms, bounds = [], []
+    spectrograms, bounds, mel_spectrograms, mel_bounds = [], [], [], []
     try:
         i = AudioProcessingInterface.create_for(audio_path, mode='file', sr=sample_rate)
         # Cut out the audio in small samples of appropriate duration
@@ -103,18 +146,34 @@ def preprocess(audio_path: str):
             # Cut out the window into the audio
             window = i.extract_window(sample_duration, method="bounded", start=start * sample_duration)
             window.preprocess(preprocess_audio)
+            
             # Compute its spectrogram
             spect = window.log_spectrogram(n_fft=n_fft, hop_length=hop_length) 
             bounds.append([spect.min(), spect.max()])
             spect = preprocess_spectrogram(spect)
-            if spect is None:
+            
+            # Compute its mel spectrogram
+            mel_spect = window.log_mel_spectrogram(n_mels=n_mels, n_fft=n_fft, hop_length=hop_length)
+            
+            # Test before going forward with the whole dataset
+            # w = AudioProcessingInterface.create_for("", "log_mel", data=mel_spect, n_fft=n_fft, hop_length=hop_length, sr=sample_rate)
+            # w.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
+            # window.play(blocking=True)
+            # w.play(blocking=True)
+
+            mel_bounds.append([mel_spect.min(), mel_spect.max()])
+            mel_spect = preprocess_spectrogram(mel_spect)
+            
+            if spect is None or mel_spect is None:
                 raise Exception("Failed to preprocess spectrogram")
+            
             # Save to file
             spectrograms.append(spect)
+            mel_spectrograms.append(mel_spect)
     except Exception as e:
         print(f"Skipped {audio_path} due to a raised error: ", e)
-        return [], []
-    return spectrograms, bounds
+        return [], [], [], []
+    return spectrograms, bounds, mel_spectrograms, mel_bounds
 
 def preprocess_audio(y: np.ndarray):
     """
@@ -158,20 +217,22 @@ def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1, l
     if isinstance(denormalized_spect, torch.Tensor):
         denormalized_spect = denormalized_spect.cpu().numpy()
 
-    i = AudioProcessingInterface.create_for("", mode="log_spec", data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length, label=label or f"Audio #{spec_id}")
+    i = AudioProcessingInterface.create_for("", mode=creation_mode, data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length, label=label or f"Audio #{spec_id}")
     i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
     return i
 
 
 def vae_l16(evaluate: bool = True, interactive: bool = True):
+    switch_mode("log")
+
     model_path = path.join(release_root, "vae_gtzan_l16.pth")
     history_path = path.join(history_root, "vae_l16")
 
     model = VariationalAutoEncoder((
-        flat_expected_spectrogram_size,
-        flat_expected_spectrogram_size // 8,
-        flat_expected_spectrogram_size // 16,
-        flat_expected_spectrogram_size // 32,
+        log_flat_expected_spectrogram_size,
+        log_flat_expected_spectrogram_size // 8,
+        log_flat_expected_spectrogram_size // 16,
+        log_flat_expected_spectrogram_size // 32,
         16
     ))
     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.001)
@@ -180,7 +241,7 @@ def vae_l16(evaluate: bool = True, interactive: bool = True):
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
 
-    summary(model, (flat_expected_spectrogram_size, ))
+    summary(model, (log_flat_expected_spectrogram_size, ))
     if not task.trained:
         task.train(epochs)
     if evaluate:
@@ -189,37 +250,66 @@ def vae_l16(evaluate: bool = True, interactive: bool = True):
         task.interactive_evaluation()
 
 
-def cvae_v1(evaluate: bool = True, interactive: bool = True):
-    model_path = path.join(release_root, "cvae_gtzan_v1.pth")
-    history_path = path.join(history_root, "cvae_gtzan_v1")
-
+def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: bool = True):
+    switch_mode(mode)
+    model_path = path.join(release_root, f"{mode}_cvae_gtzan_v1.pth")
+    # model_path = "history\\gtzan\\mel_cvae_gtzan_v1\\20250205_140922\\model.pth"
+    history_path = path.join(history_root, f"{mode}_cvae_gtzan_v1")
+    
     model = CVAE(
         input_shape=[1, *expected_spectrogram_size],
         conv_filters=[    32,      64,  128, 256, 512, 1024],
         conv_kernels=[     3,        3,   3,   3,   3,   3],
         conv_strides=[ (2, 1),  (2, 1),   2,   2,   2,   2],
-        latent_space_dim=128
+        latent_space_dim=32
     )
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.00005)
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=10000000), optim.Adam(model.parameters(), lr=0.0001)
     
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
-
+    
     summary(model, (1, *expected_spectrogram_size))
-    if not task.trained:
-        task.train(epochs)
+    task.train(epochs)
     if evaluate:
         task.evaluate()
     if interactive:
         task.interactive_evaluation()
 
 
+# def cvae_v1(evaluate: bool = True, interactive: bool = True):
+#     switch_mode("log")
+
+#     model_path = path.join(release_root, "cvae_gtzan_v1.pth")
+#     history_path = path.join(history_root, "cvae_gtzan_v1")
+
+#     model = CVAE(
+#         input_shape=[1, *log_expected_spectrogram_size],
+#         conv_filters=[    32,      64,  128, 256, 512, 1024],
+#         conv_kernels=[     3,        3,   3,   3,   3,   3],
+#         conv_strides=[ (2, 1),  (2, 1),   2,   2,   2,   2],
+#         latent_space_dim=32
+#     )
+#     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.00005)
+    
+#     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
+#     task.add_middleware(save_model_prediction)
+#     task.save_every(50, history_path)
+
+#     summary(model, (1, *log_expected_spectrogram_size))
+#     if not task.trained:
+#         task.train(epochs)
+#     if evaluate:
+#         task.evaluate()
+#     if interactive:
+#         task.interactive_evaluation()
+
+
 if __name__ == "__main__":
     initial_setup()
     
-    vae_l16(evaluate=False)
-    cvae_v1(evaluate=False)
+    # vae_l16(evaluate=False)
+    cvae_v1(mode="mel", evaluate=True)
 
     if training_h5_file is not None:
         training_h5_file.close()
