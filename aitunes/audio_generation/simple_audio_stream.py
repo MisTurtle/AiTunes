@@ -1,20 +1,28 @@
 import os
+import os.path as path
+import random
 import numpy as np
+
+from typing import Union
 from scipy.io.wavfile import write
 
 
-def generate_sine_wave(to: str, sample_rate: int = 44100, duration: float = 5, hz: float = 440.0, amp: float = 0.5):
+def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, hz: Union[float, list[float]] = 440.0, amp: float = 0.5):
     # Adapted from https://stackoverflow.com/questions/8299303/generating-sine-wave-sound-in-python
     assert -1 <= amp <= 1  # Amp has to be between -1 and 1 so the normalization to int16 works
     
     timepoints = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-    sine_wave = amp * np.sin(2 * np.pi * hz * timepoints)
+    if not isinstance(hz, list):
+        hz = [hz]
+
+    sine_waves = [amp * np.sin(2 * np.pi * f * timepoints) for f in hz]
+    sine_wave = sum(sine_waves)
     sine_wave_pcm = np.int16(sine_wave * 32767)  # Normalize to int16 which is the pcm data size (no compression)
 
-    write(
-        os.path.join(to, f"sine_wave_{int(hz)}.wav"),
-        sample_rate, sine_wave_pcm
-    )
+    file_path = os.path.join(to, f"sine_wave_{"_".join(map(lambda x: str(x), hz))}.wav")
+        
+    write(file_path, sample_rate, sine_wave_pcm)
+    return file_path
 
 
 def generate_ascending_sine_wave(to: str, sample_rate: int = 44100, duration: float = 5, hz_min: float = 10, hz_max: float = 500, amp: float = 0.5):
@@ -47,3 +55,24 @@ def generate_instrument_sound(to: str, sample_rate=44100, duration=3.0, frequenc
         os.path.join(to, f"instrument_{frequency}Hz.wav"),
         sample_rate, signal
     )
+
+
+def generate_dataset_of_simple_instruments(to: str, sample_rate: int = 22050, unit_duration: float = 5.0):
+    """
+    Generates a dataset of simple audio files containing:
+    - 50 simple sine waves
+    - 50 combined sine waves
+    - 50 ascending / descending sine waves
+    """
+    os.makedirs(to, exist_ok=True)
+    for file in os.listdir(to):  # Clear any previous dataset
+        os.remove(path.join(to, file))
+    
+    hz_range = 10, 1500
+    r = lambda: random.randint(*hz_range)
+    for _ in range(50):
+        generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=r())
+    for _ in range(50):
+        generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=[r(), r()])
+    for _ in range(50):
+        generate_ascending_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz_min=r(), hz_max=r())

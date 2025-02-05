@@ -1,5 +1,5 @@
-from os import path
 import autoloader
+from os import path
 from aitunes.audio_generation import *
 
 if __name__ == "__main__":

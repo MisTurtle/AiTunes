@@ -12,7 +12,7 @@ from os import listdir, makedirs, walk, path
 from torchsummary import summary
 from matplotlib import pyplot as plt
 
-from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss
+from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss, mse_monotonic_kl_loss
 from aitunes.autoencoders.task_cases import GtzanDatasetTaskCase, FLAG_PLOTTING, FLAG_NONE
 from aitunes.autoencoders.autoencoders_modules import VariationalAutoEncoder, CVAE
 from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
@@ -180,6 +180,8 @@ def preprocess_audio(y: np.ndarray):
     Preprocessing applied directly to the audio data before precomputing the spectrogram
     :param y: The raw audio data
     """
+    # high = PreprocessingCollection.apply_highpass_filter(y, sample_rate, 512)
+    # band = PreprocessingCollection.apply_lowpass_filter(high, sample_rate, 6000)
     return y
 
 def preprocess_spectrogram(y: np.ndarray):
@@ -219,6 +221,7 @@ def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1, l
 
     i = AudioProcessingInterface.create_for("", mode=creation_mode, data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length, label=label or f"Audio #{spec_id}")
     i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
+    i.preprocess(preprocess_audio)
     return i
 
 
@@ -235,7 +238,7 @@ def vae_l16(evaluate: bool = True, interactive: bool = True):
         log_flat_expected_spectrogram_size // 32,
         16
     ))
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.001)
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=100000), optim.Adam(model.parameters(), lr=0.001)
     
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
     task.add_middleware(save_model_prediction)
@@ -258,12 +261,13 @@ def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: boo
     
     model = CVAE(
         input_shape=[1, *expected_spectrogram_size],
-        conv_filters=[    32,      64,  128, 256, 512, 1024],
-        conv_kernels=[     3,        3,   3,   3,   3,   3],
-        conv_strides=[ (2, 1),  (2, 1),   2,   2,   2,   2],
+        conv_filters=[     32,      64,  128, 256, 512, 1024],
+        conv_kernels=[      3,       3,    3,   3,   3,   3],
+        conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,   2],
         latent_space_dim=32
     )
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=10000000), optim.Adam(model.parameters(), lr=0.0001)
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=1000000), optim.Adam(model.parameters(), lr=0.0001)
+    # loss, optimizer = lambda *args: mse_monotonic_kl_loss(*args, alpha=10, epoch_count=task._support.ran_epochs, monotonic_delay=epochs//2), optim.Adam(model.parameters(), lr=0.0001)
     
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
     task.add_middleware(save_model_prediction)
@@ -275,34 +279,6 @@ def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: boo
         task.evaluate()
     if interactive:
         task.interactive_evaluation()
-
-
-# def cvae_v1(evaluate: bool = True, interactive: bool = True):
-#     switch_mode("log")
-
-#     model_path = path.join(release_root, "cvae_gtzan_v1.pth")
-#     history_path = path.join(history_root, "cvae_gtzan_v1")
-
-#     model = CVAE(
-#         input_shape=[1, *log_expected_spectrogram_size],
-#         conv_filters=[    32,      64,  128, 256, 512, 1024],
-#         conv_kernels=[     3,        3,   3,   3,   3,   3],
-#         conv_strides=[ (2, 1),  (2, 1),   2,   2,   2,   2],
-#         latent_space_dim=32
-#     )
-#     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.00005)
-    
-#     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
-#     task.add_middleware(save_model_prediction)
-#     task.save_every(50, history_path)
-
-#     summary(model, (1, *log_expected_spectrogram_size))
-#     if not task.trained:
-#         task.train(epochs)
-#     if evaluate:
-#         task.evaluate()
-#     if interactive:
-#         task.interactive_evaluation()
 
 
 if __name__ == "__main__":

@@ -123,7 +123,7 @@ class AutoencoderTaskSupport:
         save_to_path_fn(path.join(dir_path, "model.pth"))
 
         # Save the training progress
-        epoch_ids = ['Epoch #', *np.arange(self.ran_epochs)]
+        epoch_ids = ['Epoch #', *np.arange(self.ran_epochs - len(self.all_epoch_losses), self.ran_epochs)]
         epoch_losses = ['Total Loss', *self.all_epoch_losses]
         if self.batch_per_training_epoch is not None and self.batch_per_training_epoch > 0:
             epoch_avg_losses = ['Avg Loss', *map(lambda x: x / self.batch_per_training_epoch, self.all_epoch_losses)]
@@ -239,7 +239,13 @@ class AutoencoderTaskCase(ABC):
 
     def _load_weights(self):
         if path.exists(self._weights_path):
-            self._model.load_state_dict(torch.load(self._weights_path, weights_only=True))
+            checkpoint = torch.load(self._weights_path, weights_only=True)
+            self._model.load_state_dict(checkpoint["model"])
+            self._optimizer.load_state_dict(checkpoint["optimizer"])
+
+            self._support.ran_epochs = checkpoint["epoch"]
+            self._support.total_epochs += self._support.ran_epochs
+
             self._support.set(FLAG_TRAINED)
             self._support.log(f"Loaded weights from file {self._weights_path}")
         else:
@@ -248,7 +254,11 @@ class AutoencoderTaskCase(ABC):
     def _save_weights(self, to: Union[None, str] = None):
         save_path = to or self._weights_path
         makedirs(path.dirname(save_path), exist_ok=True)
-        torch.save(self._model.state_dict(), save_path)
+        torch.save({
+            "epoch": self._support.ran_epochs,
+            "model": self._model.state_dict(),
+            "optimizer": self._optimizer.state_dict()
+        }, save_path)
         self._support.log(f"Saved model weights at path {save_path}")
     
     def save_when(self, check: Callable[[int, float], bool], root_folder: str):

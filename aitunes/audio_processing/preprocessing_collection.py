@@ -53,16 +53,14 @@ class PreprocessingCollection:
         array = (norm_array - norm_min) / (norm_max - norm_min)
         array = array * (original_max - original_min) + original_min
         return array
-    
-
 
     @staticmethod
     def apply_lowpass_filter(signal_tensor, sample_rate, cutoff_freq, filter_order=5):
         """
         Applique un filtre passe-bas sur un signal audio
-
         """
-        signal_array = signal_tensor.numpy()
+        if isinstance(signal_tensor, torch.Tensor):
+            signal_tensor = signal_tensor.cpu().numpy()
         
         nyquist = 0.5 * sample_rate  
         norm_cutoff = cutoff_freq / nyquist  
@@ -71,10 +69,10 @@ class PreprocessingCollection:
         b, a = signal.butter(filter_order, norm_cutoff, btype="lowpass", output="ba")
 
         # Filtrer le signal
-        filtered_signal = signal.lfilter(b, a, signal_array)
+        filtered_signal = signal.lfilter(b, a, signal_tensor)
 
         # Convertir le signal filtré en tensor PyTorch
-        return torch.tensor(filtered_signal)
+        return filtered_signal
     
 
     @staticmethod
@@ -83,16 +81,17 @@ class PreprocessingCollection:
         Applique un filtre passe-haut sur un signal audio
 
         """
-        signal_array = signal_tensor.numpy()
+        if isinstance(signal_tensor, torch.Tensor):
+            signal_tensor = signal_tensor.cpu().numpy()
         
         nyquist = 0.5 * sample_rate  
         norm_cutoff = cutoff_freq / nyquist  
 
         b, a = signal.butter(filter_order, norm_cutoff, btype="highpass", output="ba")
 
-        filtered_signal = signal.lfilter(b, a, signal_array)
+        filtered_signal = signal.lfilter(b, a, signal_tensor)
 
-        return torch.tensor(filtered_signal)
+        return filtered_signal
 
 
 
