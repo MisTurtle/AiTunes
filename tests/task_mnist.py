@@ -10,41 +10,56 @@ from aitunes.autoencoders.autoencoders_modules import SimpleAutoEncoder, Variati
 
 
 flags = FLAG_PLOTTING
-epochs = 20
+epochs = 10
+release_root = path.join("assets", "Models", "mnist")
+history_root = path.join("history", "mnist")
 
 
-def ae(interactive: bool = True):
-    model_path = path.join("assets", "Models", "ae_mnist.pth")
+def ae(evaluation: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "ae_mnist.pth")
+    history_path = path.join(history_root, "ae")
+    
     model = SimpleAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
     loss, optimizer = nn.MSELoss(), optim.Adam(model.parameters(), lr=0.001)
+    
     task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=True, flags=flags)
+    task.save_every(5, history_path)
 
     summary(model, (28 * 28, ))
     if not task.trained:
         task.train(epochs)
-    task.evaluate()
-    if interactive:
-        task.display_embed_plot()
-        task.interactive_evaluation()
+
+    if evaluation:
+        task.evaluate()
+        if interactive:
+            task.display_embed_plot()
+            task.interactive_evaluation()
 
 
-def vae(interactive: bool = True):
-    model_path = path.join("assets", "Models", "vae_mnist.pth")
+def vae(evaluation: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "vae_mnist.pth")
+    history_path = path.join(history_root, "vae")
+    
     model = VariationalAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
     loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
+    
     task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=True, flags=flags)
+    task.save_every(5, history_path)
 
     summary(model, (28 * 28, ))
     if not task.trained:
         task.train(epochs)
-    task.evaluate()
-    if interactive:
-        task.display_embed_plot()
-        task.interactive_evaluation()
+    if evaluation:
+        task.evaluate()
+        if interactive:
+            task.display_embed_plot()
+            task.interactive_evaluation()
 
 
-def cvae(interactive: bool = True):
-    model_path = path.join("assets", "Models", "cvae_mnist.pth")
+def cvae(evaluation: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "cvae_mnist.pth")
+    history_path = path.join(history_root, "cvae")
+
     model = CVAE(
         input_shape=[1, 28, 28],
         conv_filters=[32, 64, 128],
@@ -52,19 +67,22 @@ def cvae(interactive: bool = True):
         conv_strides=[ 2,  2,  2],
         latent_space_dim=2
     )
-    summary(model, (1, 28, 28))
     loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
-    task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=False, flags=flags)
     
+    task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=False, flags=flags)
+    task.save_every(5, history_path)
+
+    summary(model, (1, 28, 28))  # TODO : Make summaries automatically show up from the autoencoder classes
     if not task.trained:
         task.train(epochs)
-    task.evaluate()
-    if interactive:
-        task.display_embed_plot()
-        task.interactive_evaluation()
+    if evaluation:
+        task.evaluate()
+        if interactive:
+            task.display_embed_plot()
+            task.interactive_evaluation()
 
 
 if __name__ == "__main__":
-    ae()
-    vae()
+    # ae()
+    # vae()
     cvae()

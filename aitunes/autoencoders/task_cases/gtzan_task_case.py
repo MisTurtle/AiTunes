@@ -116,7 +116,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
     def generate_track(self):
         if self._latent_space_size is None:
             return  # Latent space size hasn't been computed yet, which shouldn't happen as it is computed right when we enter interactive mode
-        self._generated_sample = torch.from_numpy(PreprocessingCollection.normalise(np.random.randn(self._latent_space_size).astype(np.float32), -1, 1)).to(device)
+        self._generated_sample = torch.from_numpy(np.random.randn(self._latent_space_size).astype(np.float32)).to(device)
         self.display_track()
 
     def display_track(self, _=None, colorbar=False):

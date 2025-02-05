@@ -2,5 +2,6 @@
 **/__pycache__
 assets/Samples/
 assets/Resources/
+assets/Models/gtzan/
+history/
 .vscode/
-assets/Models/*_gtzan.pth

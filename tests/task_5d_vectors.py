@@ -11,34 +11,47 @@ from aitunes.autoencoders.autoencoders_modules import SimpleAutoEncoder, Variati
 
 flags = FLAG_PLOTTING
 epochs = 200
+release_root = path.join("assets", "Models", "5dvectors")
+history_root = path.join("history", "5dvectors")
 
 
-def ae(interactive: bool = True):
-    model_path = path.join("assets", "Models", "ae_5d_vectors.pth")
+def ae(evaluation: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "simple_ae.pth")
+    history_path = path.join(history_root, "ae")
+
     model = SimpleAutoEncoder((5, 4, 3))
     loss, optimizer = nn.MSELoss(), optim.Adam(model.parameters(), lr=0.001)
+    
     task = LinearVectorAugmentationTaskCase(model, model_path, loss, optimizer, flags)
+    task.save_every(50, history_path)
 
     summary(model, (5, ))
     if not task.trained:
         task.train(epochs)
-    task.evaluate()
-    if interactive:
-        task.interactive_evaluation()
+    if evaluation:
+        task.evaluate()
+        if interactive:
+            task.interactive_evaluation()
 
 
-def vae(interactive: bool = True):
-    model_path = path.join("assets", "Models", "vae_5d_vectors.pth")
+def vae(evaluation: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "simple_vae.pth")
+    history_path = path.join(history_root, "vae")
+    
     model = VariationalAutoEncoder((5, 4, 3))
     loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
+
     task = LinearVectorAugmentationTaskCase(model, model_path, loss, optimizer, flags)
+    task.save_every(50, history_path)
 
     summary(model, (5, ))
     if not task.trained:
         task.train(epochs)
-    task.evaluate()
-    if interactive:
-        task.interactive_evaluation()
+
+    if evaluation:
+        task.evaluate()
+        if interactive:
+            task.interactive_evaluation()
 
 
 if __name__ == "__main__":

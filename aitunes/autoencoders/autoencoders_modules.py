@@ -119,6 +119,31 @@ class CVAE(nn.Module):
         layers.append(nn.Flatten())
         return nn.Sequential(*layers) 
     
+    def _compute_decoder_padding(self, i) -> tuple[int, int]:
+        """
+        Takes the index of a convolutional layer and computes the padding to apply to its transpose to get the exact same output shape
+        :param conv_index: The convolutional layer index
+        :return: Symmetrical padding, one-sided padding
+        """
+        kernel_size, stride = self.conv_kernels[i], self.conv_strides[i]
+        
+        padding = kernel_size // 2
+
+        h_in, w_in = self.shape_at_i[i]
+        h_out = (h_in - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
+        w_out = (w_in - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
+        h_out_target, w_out_target = self.shape_at_i[i - 1] if i > 0 else self.input_shape[1:]
+        p_h, p_w = h_out_target - h_out, w_out_target - w_out
+
+        # Source: https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html
+        # Do not remove the following, in case things break again ;-;
+        # print(f"Shape before {i} convolution should be {self.shape_at_i[i]}")
+        # print("Output size:", h_out, w_out)
+        # print("Target output size:", h_out_target, w_out_target)
+
+        return padding, (p_h, p_w)
+            
+    
     def _create_decoder(self):
         layers = [nn.Linear(self.latent_space_dim, self._shape_before_bottleneck[0])]
         
@@ -128,25 +153,16 @@ class CVAE(nn.Module):
         input_channels = self.conv_filters[-1]
         for i in range(len(self.conv_filters) - 1, 0, -1):
             out_channels, kernel_size, stride = self.conv_filters[i - 1], self.conv_kernels[i], self.conv_strides[i]
-            padding = kernel_size // 2
-
-            # Source: https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html
-            h_in, w_in = self.shape_at_i[i]
-            h_out = (h_in - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
-            w_out = (w_in - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
-            h_out_target, w_out_target = self.shape_at_i[i - 1]
-            p_h, p_w = h_out_target - h_out, w_out_target - w_out
-            # Do not remove the following, in case things break again ;-;
-            # print(f"Shape before {i} convolution should be {self.shape_at_i[i]}")
-            # print("Output size:", h_out, w_out)
-            # print("Target output size:", h_out_target, w_out_target)
-
+            padding, (p_h, p_w) = self._compute_decoder_padding(i)
+            
             layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=padding, output_padding=(p_h, p_w)))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm2d(out_channels))
+            
             input_channels = out_channels
 
-        layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=self.conv_kernels[0] // 2))
+        padding, (p_h, p_w) = self._compute_decoder_padding(0)
+        layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=padding, output_padding=(p_h, p_w)))
         # layers.append(nn.Sigmoid())
         layers.append(nn.ReLU())
         return nn.Sequential(*layers)

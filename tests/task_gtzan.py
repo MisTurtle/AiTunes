@@ -28,8 +28,8 @@ makedirs(comparison_path, exist_ok=True)
 
 # Audio and model variables
 flags = FLAG_NONE
-# epochs = 1000
-epochs = 20
+epochs = 250
+
 n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 1024, 512, 1., 22050, 10
 expected_spectrogram_size = int(n_fft // 2) + 1, int(sample_duration * sample_rate // hop_length) + 1
 flat_expected_spectrogram_size = expected_spectrogram_size[0] * expected_spectrogram_size[1]
@@ -38,6 +38,11 @@ spec_bounds = -80, 0  # Bounds used to reconstruct audio from a normalized spect
 
 # H5 file instances
 training_h5_file, evaluation_h5_file = None, None
+
+# Save and history paths
+release_root = path.join("assets", "Models", "gtzan")
+history_root = path.join("history", "gtzan")
+
 
 def initial_setup():
     global training_h5_file, evaluation_h5_file
@@ -53,7 +58,7 @@ def initial_setup():
 
     # Check if spectrograms have been precomputed
     if not path.exists(training_set_path) or not path.exists(evaluation_set_path):
-        evaluation_data_size = 50 * sample_per_item  # (1000 items in the dataset, 100 used for evaluation)
+        evaluation_data_size = 10 * sample_per_item  # (1000 items in the dataset, 100 used for evaluation)
         makedirs(precomputed_spectrograms_path, exist_ok=True)
         all_spectrograms, all_bounds = [], []
         for root, _, files in walk(audio_dataset_path):
@@ -63,7 +68,6 @@ def initial_setup():
                 all_spectrograms += spectrograms
                 all_bounds += bounds
         
-        print(all_bounds)        
         print("\rSpectrograms precomputed. Saving as HDF5 datasets...")
         # attrs = {"n_fft": n_fft, "hop_length": hop_length, "sample_duration": sample_duration, "sample_rate": sample_rate}  # Might be useful to store those? Meh maybe not
         
@@ -159,8 +163,10 @@ def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1, l
     return i
 
 
-def vae(evaluate: bool = True, interactive: bool = True):
-    model_path = path.join("assets", "Models", "vae_gtzan.pth")
+def vae_l16(evaluate: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "vae_gtzan_l16.pth")
+    history_path = path.join(history_root, "vae_l16")
+
     model = VariationalAutoEncoder((
         flat_expected_spectrogram_size,
         flat_expected_spectrogram_size // 8,
@@ -169,8 +175,10 @@ def vae(evaluate: bool = True, interactive: bool = True):
         16
     ))
     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.001)
+    
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
     task.add_middleware(save_model_prediction)
+    task.save_every(50, history_path)
 
     summary(model, (flat_expected_spectrogram_size, ))
     if not task.trained:
@@ -181,18 +189,22 @@ def vae(evaluate: bool = True, interactive: bool = True):
         task.interactive_evaluation()
 
 
-def cvae(evaluate: bool = True, interactive: bool = True):
-    model_path = path.join("assets", "Models", "cvae_gtzan.pth")
+def cvae_v1(evaluate: bool = True, interactive: bool = True):
+    model_path = path.join(release_root, "cvae_gtzan_v1.pth")
+    history_path = path.join(history_root, "cvae_gtzan_v1")
+
     model = CVAE(
         input_shape=[1, *expected_spectrogram_size],
-        conv_filters=[32, 64, 128, 256, 512],
-        conv_kernels=[ 3,  3,   3,   3,   5],
-        conv_strides=[ (2, 1),  (2, 1),   5,   2,   2],
+        conv_filters=[    32,      64,  128, 256, 512, 1024],
+        conv_kernels=[     3,        3,   3,   3,   3,   3],
+        conv_strides=[ (2, 1),  (2, 1),   2,   2,   2,   2],
         latent_space_dim=128
     )
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.0005)
+    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, reconstruction_weight=100000), optim.Adam(model.parameters(), lr=0.00005)
+    
     task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
     task.add_middleware(save_model_prediction)
+    task.save_every(50, history_path)
 
     summary(model, (1, *expected_spectrogram_size))
     if not task.trained:
@@ -205,8 +217,10 @@ def cvae(evaluate: bool = True, interactive: bool = True):
 
 if __name__ == "__main__":
     initial_setup()
-    # vae(evaluate=False)
-    cvae(evaluate=False)
+    
+    vae_l16(evaluate=False)
+    cvae_v1(evaluate=False)
+
     if training_h5_file is not None:
         training_h5_file.close()
     if evaluation_h5_file is not None:

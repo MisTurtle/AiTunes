@@ -1,10 +1,12 @@
-from os import path
+from os import path, listdir, makedirs
 from typing import Any, Callable, Union
 from abc import ABC, abstractmethod
+from datetime import datetime
 from aitunes.utils import get_loading_char
 from aitunes.autoencoders.autoencoders_modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 
 import time
+import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
@@ -32,8 +34,10 @@ class AutoencoderTaskSupport:
         self.total_epochs, self.ran_epochs = 0, 0
         self.all_epoch_losses, self.current_epoch_losses = [], []
         self.current_epoch_loss = .0
-        self.epoch_start = time.time()
+        self.epoch_start, self.all_epoch_running_time = time.time(), []
         self.ax, self.fig, self.plot_calls = None, None, 0
+        self.save_check, self.save_path = None, None
+        self.batch_per_training_epoch = 0
     
     @property
     def prefix(self):
@@ -65,6 +69,10 @@ class AutoencoderTaskSupport:
         self._state &= ~flag
         return self
     
+    def set_batch_size(self, batch_size: int) -> 'AutoencoderTaskSupport':
+        self.batch_per_training_epoch = batch_size
+        return self
+    
     def blank_epoch(self) -> 'AutoencoderTaskSupport':
         self.current_epoch_losses.clear()
         self.epoch_start = time.time()
@@ -73,7 +81,10 @@ class AutoencoderTaskSupport:
     def next_epoch(self) -> 'AutoencoderTaskSupport':
         self.ran_epochs += 1
         self.all_epoch_losses.append(self.epoch_loss)
+        self.all_epoch_running_time.append(self.epoch_runtime)
         self.plot_loss_progress(1)
+        if not self.has(FLAG_TRAINED):
+            self.set_batch_size(self.epoch_batches)
         return self.blank_epoch()
     
     def add_total_epochs(self, n: int) -> 'AutoencoderTaskSupport':
@@ -83,6 +94,54 @@ class AutoencoderTaskSupport:
     def add_batch_result(self, loss: float) -> 'AutoencoderTaskSupport':
         self.current_epoch_losses.append(loss)
         return self
+    
+    # SAVING FUNCTIONS BELOW
+    def save_when(self, check: Callable[[int, float], bool], root_folder: str):
+        self.save_check = check
+        self.save_path = root_folder
+    
+    def perform_save(self, save_to_path_fn: Callable[[str], None]):
+        """
+        :param save_to_path_fn: A function taking a path as a parameter and saving weights of the model there
+        """
+        should_save = self.save_check is not None and self.save_check(self.ran_epochs, self.epoch_loss)
+        force_save = self.ran_epochs == self.total_epochs
+        should_save |= force_save  # Always save if the training is about to end
+        
+        if not should_save:
+            return
+        
+        if self.save_path is None:
+            save_to_path_fn(None)
+            return
+        
+        dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dir_path = path.join(self.save_path, dir_name)
+
+        # Save the model
+        makedirs(dir_path, exist_ok=True)
+        save_to_path_fn(path.join(dir_path, "model.pth"))
+
+        # Save the training progress
+        epoch_ids = ['Epoch #', *np.arange(self.ran_epochs)]
+        epoch_losses = ['Total Loss', *self.all_epoch_losses]
+        if self.batch_per_training_epoch is not None and self.batch_per_training_epoch > 0:
+            epoch_avg_losses = ['Avg Loss', *map(lambda x: x / self.batch_per_training_epoch, self.all_epoch_losses)]
+        else:
+            epoch_avg_losses = epoch_losses
+        epoch_duration = ['Runtime', *self.all_epoch_running_time]
+
+        np.savetxt(
+            path.join(dir_path, "progress.csv"),
+            [row for row in zip(epoch_ids, epoch_losses, epoch_avg_losses, epoch_duration)],
+            delimiter=",",
+            fmt="%s"
+        )
+
+        # If the training reached the end, save the last model a second time as a release one.
+        if force_save:
+            save_to_path_fn(None)
+
     
     # PLOTTING FUNCTIONS BELOW
     def plot_loss_progress(self, every: int = 10) -> 'AutoencoderTaskSupport':
@@ -110,7 +169,7 @@ class AutoencoderTaskSupport:
         plt.pause(0.1)
         return self
 
-    # LOGGING FUNCTIONS BELOW, CAN BE IGNORED
+    # LOGGING FUNCTIONS BELOW
 
     def log(self, msg: str) -> 'AutoencoderTaskSupport':
         print(f"{self.prefix} {msg}")
@@ -186,9 +245,24 @@ class AutoencoderTaskCase(ABC):
         else:
             self._support.log(f"Weights could not be found at path {self._weights_path}")
     
-    def _save_weights(self):
-        torch.save(self._model.state_dict(), self._weights_path)
-        self._support.log(f"Saved model weights at path {self._weights_path}")
+    def _save_weights(self, to: Union[None, str] = None):
+        save_path = to or self._weights_path
+        makedirs(path.dirname(save_path), exist_ok=True)
+        torch.save(self._model.state_dict(), save_path)
+        self._support.log(f"Saved model weights at path {save_path}")
+    
+    def save_when(self, check: Callable[[int, float], bool], root_folder: str):
+        """
+        :param check: A callable taking the current epoch as well as the current loss as a parameter, and returns true if the model should be save
+        :param root_folder: A formattable string that points to a folder where to save the model and training data at.
+        """
+        self._support.save_when(check, root_folder)
+    
+    def save_every(self, epoch_count: int, root_folder: str):
+        """
+        A shorthand function to save the model every x epochs
+        """
+        self.save_when(lambda epoch, _: epoch % epoch_count == 0, root_folder)
 
     def train(self, epochs: int):
         self._model.train(True)
@@ -207,8 +281,9 @@ class AutoencoderTaskCase(ABC):
                 self._support.add_batch_result(batch_loss.item()).log_training_loss()
 
             self._support.log_training_loss(ended=True).next_epoch()
-        # Save the model and mark as trained
-        self._save_weights()
+            # Save the model only if necessary (checks are performed in the support directly)
+            self._support.perform_save(self._save_weights)
+        
         self._support.set(FLAG_TRAINED)
 
     def evaluate(self):
