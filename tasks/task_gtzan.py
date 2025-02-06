@@ -1,6 +1,3 @@
-
-from typing import Literal, Union
-import autoloader
 import random
 import h5py
 import numpy as np
@@ -10,7 +7,7 @@ import torch.optim as optim
 
 from os import listdir, makedirs, walk, path
 from torchsummary import summary
-from matplotlib import pyplot as plt
+from typing import Literal, Union
 
 from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss, mse_monotonic_kl_loss
 from aitunes.autoencoders.task_cases import GtzanDatasetTaskCase, FLAG_PLOTTING, FLAG_NONE
@@ -244,7 +241,6 @@ def vae_l16(evaluate: bool = True, interactive: bool = True):
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
 
-    summary(model, (log_flat_expected_spectrogram_size, ))
     if not task.trained:
         task.train(epochs)
     if evaluate:
@@ -273,7 +269,6 @@ def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: boo
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
     
-    summary(model, (1, *expected_spectrogram_size))
     task.train(epochs)
     if evaluate:
         task.evaluate()

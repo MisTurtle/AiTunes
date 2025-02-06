@@ -1,4 +1,3 @@
-import autoloader
 import torch.nn as nn
 import torch.optim as optim
 
@@ -25,7 +24,6 @@ def ae(evaluation: bool = True, interactive: bool = True):
     task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=True, flags=flags)
     task.save_every(5, history_path)
 
-    summary(model, (28 * 28, ))
     if not task.trained:
         task.train(epochs)
 
@@ -46,7 +44,6 @@ def vae(evaluation: bool = True, interactive: bool = True):
     task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=True, flags=flags)
     task.save_every(5, history_path)
 
-    summary(model, (28 * 28, ))
     if not task.trained:
         task.train(epochs)
     if evaluation:
@@ -72,7 +69,6 @@ def cvae(evaluation: bool = True, interactive: bool = True):
     task = MnistDigitCompressionTaskCase(model, model_path, loss, optimizer, flatten=False, flags=flags)
     task.save_every(5, history_path)
 
-    summary(model, (1, 28, 28))  # TODO : Make summaries automatically show up from the autoencoder classes
     if not task.trained:
         task.train(epochs)
     if evaluation:

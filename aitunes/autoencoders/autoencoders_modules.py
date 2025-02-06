@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchsummary import summary
 
 
 class SimpleEncoder(nn.Module):
@@ -39,11 +40,13 @@ class SimpleAutoEncoder(nn.Module):
     A vanilla auto encoder class
     """
 
-    def __init__(self, encoder_dimensions):
+    def __init__(self, encoder_dimensions, show_summary: bool = True):
         super().__init__()
 
         self._encoder = SimpleEncoder(encoder_dimensions)
         self._decoder = SimpleDecoder(encoder_dimensions[::-1])
+        if show_summary:
+            summary(self, (encoder_dimensions[0], ))
     
     def forward(self, x):
         embedding = self._encoder(x)
@@ -69,11 +72,14 @@ class VariationalAutoEncoder(nn.Module):
     """
     A variational auto encoder class
     """
-    def __init__(self, encoder_dimensions):
+    def __init__(self, encoder_dimensions, show_summary: bool = True):
         super().__init__()
 
         self._encoder = VariationalEncoder(encoder_dimensions)
         self._decoder = SimpleDecoder(encoder_dimensions[::-1])
+        
+        if show_summary:
+            summary(self, (encoder_dimensions[0], ))
 
     def reparameterize(self, mu, log_var):
         epsilon = torch.randn_like(mu)
@@ -87,7 +93,7 @@ class VariationalAutoEncoder(nn.Module):
 
 class CVAE(nn.Module):
 
-    def __init__(self, input_shape, conv_filters, conv_kernels, conv_strides, latent_space_dim):
+    def __init__(self, input_shape, conv_filters, conv_kernels, conv_strides, latent_space_dim, show_summary: bool = True):
         super(CVAE, self).__init__()
         
         self.input_shape = input_shape  # Data input shape (channels, height, width)
@@ -103,6 +109,9 @@ class CVAE(nn.Module):
         self._mu = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
         self._log_var = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
         self._decoder = self._create_decoder()
+
+        if show_summary:
+            summary(self, (*input_shape, ))
 
 
     def _create_encoder(self):
@@ -201,7 +210,3 @@ class CVAE(nn.Module):
         z = self.reparameterize(mu, log_var)
         x_reconstructed = self._decode(z)
         return z, x_reconstructed, mu, log_var
-
-    
-
-    

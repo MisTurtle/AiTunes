@@ -1,18 +1,15 @@
-import autoloader
 import random
 import h5py
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
-from typing import Literal, Union
-from os import makedirs, walk, path
+from typing import Union
+from os import walk, path
 from torchsummary import summary
-from matplotlib import pyplot as plt
 
 from aitunes.utils import get_loading_char, save_dataset, simple_mse_kl_loss
-from aitunes.autoencoders.task_cases import SinewaveTaskCase, FLAG_PLOTTING, FLAG_NONE
+from aitunes.autoencoders.task_cases import SinewaveTaskCase, FLAG_PLOTTING
 from aitunes.autoencoders.autoencoders_modules import CVAE
 from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
 from aitunes.audio_generation.simple_audio_stream import generate_dataset_of_simple_instruments
@@ -178,7 +175,6 @@ def cvae(evaluate: bool = True, interactive: bool = True):
     task.add_middleware(save_model_prediction)
     task.save_every(10, history_path)
     
-    summary(model, (1, *expected_spectrogram_size))
     # if not task.trained:
     task.train(epochs)
     if evaluate:

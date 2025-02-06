@@ -1,4 +1,3 @@
-import autoloader
 import torch.nn as nn
 import torch.optim as optim
 
@@ -25,7 +24,6 @@ def ae(evaluation: bool = True, interactive: bool = True):
     task = LinearVectorAugmentationTaskCase(model, model_path, loss, optimizer, flags)
     task.save_every(50, history_path)
 
-    summary(model, (5, ))
     if not task.trained:
         task.train(epochs)
     if evaluation:
@@ -44,7 +42,6 @@ def vae(evaluation: bool = True, interactive: bool = True):
     task = LinearVectorAugmentationTaskCase(model, model_path, loss, optimizer, flags)
     task.save_every(50, history_path)
 
-    summary(model, (5, ))
     if not task.trained:
         task.train(epochs)
 
@@ -55,5 +52,5 @@ def vae(evaluation: bool = True, interactive: bool = True):
 
 
 if __name__ == "__main__":
-    ae()
+    # ae()
     vae()
