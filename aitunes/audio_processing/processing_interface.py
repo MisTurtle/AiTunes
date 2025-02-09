@@ -13,7 +13,7 @@ class AudioProcessingInterface:
     """
     A class allowing for an easy inline manipulation of audio files
     Usage Example:
-        i = AudioProcessingInterface("path/to/file.wav")
+        i = AudioProcessingInterface("path/to/file.wav", mode="file")
         i.full_summary()  # Display features for the original file
         i.preprocess(fn1, fn2, fn3)  # Apply filters to the audio file
         i.full_summary()  # Display features for the preprocessed file

@@ -1,3 +1,4 @@
+from os import path
 import unittest
 import autoloader
 import numpy as np
@@ -62,21 +63,17 @@ class TestPreprocessingCollection(unittest.TestCase):
         self.assertEqual(array.min(), original_min)
         self.assertEqual(array.max(), original_max)
 
-
-
     def apply_filters(self):
-        file_path = 'C:\\Users\\hp\\Desktop\\Mon Project\\AiTunes\\assets\\Samples\\generated\\sine_asc_wave_150-300.wav'
+        file_path = path.join("assets", "Samples", "generated", "sine_asc_wave_150-300.wav")
         
         sample_rate = 5000  
         cutoff_freq = 200 
         filter_order = 7    
         
         audio_data, _ = librosa.load(file_path, sr=sample_rate)
-        signal_tensor = torch.tensor(audio_data)
         
-        filtered_signal_lowpass = PreprocessingCollection.apply_lowpass_filter(signal_tensor, sample_rate, cutoff_freq, filter_order)
-        
-        filtered_signal_highpass = PreprocessingCollection.apply_highpass_filter(signal_tensor, sample_rate, cutoff_freq, filter_order)
+        filtered_signal_lowpass = PreprocessingCollection.apply_lowpass_filter(audio_data, sample_rate, cutoff_freq, filter_order)
+        filtered_signal_highpass = PreprocessingCollection.apply_highpass_filter(audio_data, sample_rate, cutoff_freq, filter_order)
     
 
         def plot_fft(signal, ax, title):
@@ -91,15 +88,15 @@ class TestPreprocessingCollection(unittest.TestCase):
 
         plt.figure(figsize=(12, 12))
         ax1 = plt.subplot(3, 1, 1)
-        plot_fft(signal_tensor.numpy(), ax1, 'signal original')
+        plot_fft(audio_data, ax1, 'signal original')
         ax2 = plt.subplot(3, 1, 2)
-        plot_fft(filtered_signal_lowpass.numpy(), ax2, f'signal filtré passe-bas ({cutoff_freq} Hz)')
+        plot_fft(filtered_signal_lowpass, ax2, f'signal filtré passe-bas ({cutoff_freq} Hz)')
         ax3 = plt.subplot(3, 1, 3)
-        plot_fft(filtered_signal_highpass.numpy(), ax3, f'signal filtré passe-haut ({cutoff_freq} Hz)')
+        plot_fft(filtered_signal_highpass, ax3, f'signal filtré passe-haut ({cutoff_freq} Hz)')
 
         plt.tight_layout()
-        plt.show()  
-        input("")
+        plt.show()
 
 if __name__ == '__main__':
+    TestPreprocessingCollection().apply_filters()
     unittest.main()

@@ -2,16 +2,14 @@ import random
 import h5py
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
-from os import listdir, makedirs, walk, path
-from torchsummary import summary
+from os import makedirs, walk, path
 from typing import Literal, Union
 
-from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss, mse_monotonic_kl_loss
-from aitunes.autoencoders.task_cases import GtzanDatasetTaskCase, FLAG_PLOTTING, FLAG_NONE
-from aitunes.autoencoders.autoencoders_modules import VariationalAutoEncoder, CVAE
+from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss
+from aitunes.experiments.cases import GtzanExperiment
+from aitunes.modules import VariationalAutoEncoder, CVAE
 from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
 
 
@@ -32,7 +30,6 @@ comparison_path = path.join("assets", "Samples", "generated", "gtzan")
 makedirs(comparison_path, exist_ok=True)
 
 # Audio and model variables
-flags = FLAG_NONE
 epochs = 200
 
 # Features settings for each mode
@@ -237,7 +234,7 @@ def vae_l16(evaluate: bool = True, interactive: bool = True):
     ))
     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=100000), optim.Adam(model.parameters(), lr=0.001)
     
-    task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
+    task = GtzanExperiment(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
 
@@ -265,7 +262,7 @@ def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: boo
     loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=1000000), optim.Adam(model.parameters(), lr=0.0001)
     # loss, optimizer = lambda *args: mse_monotonic_kl_loss(*args, alpha=10, epoch_count=task._support.ran_epochs, monotonic_delay=epochs//2), optim.Adam(model.parameters(), lr=0.0001)
     
-    task = GtzanDatasetTaskCase(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
+    task = GtzanExperiment(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
     task.add_middleware(save_model_prediction)
     task.save_every(50, history_path)
     

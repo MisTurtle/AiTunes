@@ -2,31 +2,31 @@ from typing import Union
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from matplotlib.widgets import Button
-from aitunes.audio_processing.preprocessing_collection import PreprocessingCollection
-from aitunes.audio_processing.processing_interface import AudioProcessingInterface
-from aitunes.utils import device, normalize
-from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
+
+from aitunes.utils import device
+from aitunes.utils.audio_utils import AudioFeatures, reconstruct_audio
+from aitunes.experiments import AutoencoderExperiment
+from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
 
 import h5py
 import numpy as np
 import torch
 
-class GtzanDatasetTaskCase(AutoencoderTaskCase):
-    """
-    The GTZAN dataset has 100 30-second samples for a wapping 10 different genres, resulting in 1000 * 30 = 30'000 seconds of music to train on
-    For this purpose, 95 samples will be split and used for the training process in each genre, while the other 5 will be used for model evaluation
-    """
-    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, reconstruct_audio, flatten: bool = False, flags: int = FLAG_NONE):
-        """
-        :param reconstruct_audio: Reconstruct an AudioProcessingInterface from a normalized spectrogram
-        """
-        super().__init__("GTZAN", model, weights_path, loss, optimizer, flags)
+class SinewaveExperiment(AutoencoderExperiment):
+
+    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, flatten: bool = False):
+        super().__init__("SineWave", model, weights_path, loss, optimizer)
         self._flatten = flatten
-        self.train_loader = training_data
+        
+        self.train_loader = training_data["spectrograms"]
+        self.train_labels = training_data["labels"]
         self.training_indices = np.arange(len(self.train_loader))
-        self.test_loader = evaluation_data
+
+        self.test_loader = evaluation_data["spectrograms"]
+        self.test_labels = evaluation_data["labels"]
         self.test_indices = np.arange(len(self.test_loader))
-        self.reconstruct_audio = reconstruct_audio
+
+        self.mode = mode
 
         # Interactive evaluation variables
         self._generated_sample: Union[None, torch.Tensor] = None  # Not None if the user is listening to brand new audio generated randomly
@@ -37,14 +37,14 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         self._latent_space_size = None  # Computed during interactive validation for now
 
     def next_batch(self, training): 
-        if not training:
-            dataset = self.test_loader
-            np.random.shuffle(self.test_indices)
-            indices = self.test_indices
-        else:
+        if training:
             dataset = self.train_loader
             np.random.shuffle(self.training_indices)
             indices = self.training_indices
+        else:
+            dataset = self.test_loader
+            np.random.shuffle(self.test_indices)
+            indices = self.test_indices
         
         complete = False
         batch_size, current_index = 32, 0
@@ -54,7 +54,8 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
                 complete = True
             else:
                 batch_indices = indices[current_index:current_index + batch_size]
-            batch_indices = np.sort(batch_indices)
+            
+            batch_indices = np.sort(batch_indices)  # Indices need to be sorted for h5py slices
             spectrograms = dataset[batch_indices]
             spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
 
@@ -63,7 +64,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             else:
                 spectrograms = spectrograms.unsqueeze(1)
 
-            yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
+            yield spectrograms, batch_indices
             current_index += batch_size
 
     def interactive_evaluation(self):
@@ -86,11 +87,11 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             ]
             self._fig.subplots_adjust(bottom=0.09, top=0.925)
             
-            # Create buttons
+            # Create buttons (from left to right)
             axgenerate  = self._fig.add_axes([0.10, 0.025, 0.08, 0.03])
             axreload    = self._fig.add_axes([0.19, 0.025, 0.08, 0.03])
-            axplayrec   = self._fig.add_axes([0.42, 0.025, 0.08, 0.03])
-            axplayog    = self._fig.add_axes([0.51, 0.025, 0.08, 0.03])
+            axplayog    = self._fig.add_axes([0.42, 0.025, 0.08, 0.03])
+            axplayrec   = self._fig.add_axes([0.51, 0.025, 0.08, 0.03])
             axprev      = self._fig.add_axes([0.73, 0.025, 0.08, 0.03])
             axnext      = self._fig.add_axes([0.82, 0.025, 0.08, 0.03])
 
@@ -98,10 +99,10 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             bnext.on_clicked(self.next_track)
             bprev = Button(axprev, 'Previous')
             bprev.on_clicked(self.prev_track)
-            bplayog = Button(axplayog, 'Play Original')
-            bplayog.on_clicked(lambda _: self._i_og.play())
             bplayrec = Button(axplayrec, 'Play Generated')
             bplayrec.on_clicked(lambda _: self._i_rec.play())
+            bplayog = Button(axplayog, 'Play Original')
+            bplayog.on_clicked(lambda _: self._i_og.play())
             breload = Button(axreload, 'Regenerate')
             breload.on_clicked(self.display_track)  # This will regenerate a prediction based on the same input, eventually leading to a slightly different result due to normal distribution
             bgenerate = Button(axgenerate, 'Create Track')
@@ -126,6 +127,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         if self._generated_sample is None:
             # Load the spectrogram and its prediction
             original_spectrogram = self.test_loader[self._current_track]
+            spectrogram_label = self.test_labels[self._current_track].decode('UTF-8')
             model_input = torch.tensor(original_spectrogram, dtype=torch.float32)
             model_input = model_input.unsqueeze(0)
 
@@ -138,11 +140,11 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
             # Evaluate and predict the reconstructed spectrogram
             latent, reconstructed_spectrogram, *args = self.model(model_input)
             loss = self._loss_criterion(model_input, reconstructed_spectrogram, *args)
-            self._fig.suptitle(f"Comparing Evaluation Track #{self._current_track}  //  Loss: {loss:.3f}")
+            self._fig.suptitle(f"Comparing Track {spectrogram_label}  //  Loss: {loss:.3f}")
 
             # Fetch the audio processing interfaces from the middleware (not the cleanest but easier to implement)
-            self._i_og = self.reconstruct_audio(original_spectrogram, self._current_track, label="Original")
-            self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, self._current_track, label="Reconstructed")
+            self._i_og = reconstruct_audio(original_spectrogram, self.mode, label="Original " + spectrogram_label)
+            self._i_rec = reconstruct_audio(reconstructed_spectrogram, self.mode, label="Reconstructed" + spectrogram_label)
             self._i_og.compare_waves(self._i_rec, ax=self._axes[0])  # Draw the wave comparison
             # Plot spectrograms
             self._i_og.get_plot_for(['log_mel'], title="Original Spectrogram", axes=self._axes[1], fig=self._fig, colorbar=colorbar)
@@ -153,7 +155,7 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         else:
             latent = self._generated_sample
             reconstructed_spectrogram = self.model._decoder(latent.unsqueeze(0))
-            self._i_og = self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, -1, label="Generated")
+            self._i_og = self._i_rec = self.reconstruct_audio(reconstructed_spectrogram, self.mode, label="Generated")
             self._fig.suptitle("Randomly generated track")
             self._i_rec.draw_wave(self._axes[0])
             self._i_rec.get_plot_for(['log_mel'], title="Reconstructed Spectrogram", axes=self._axes[2], fig=self._fig, colorbar=colorbar)
@@ -173,5 +175,3 @@ class GtzanDatasetTaskCase(AutoencoderTaskCase):
         self._generated_sample = None
         self._current_track = (self._current_track - 1) % self.test_loader.shape[0]
         self.display_track()
-    
-

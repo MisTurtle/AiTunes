@@ -5,18 +5,22 @@ from matplotlib.widgets import Button
 from aitunes.audio_processing.preprocessing_collection import PreprocessingCollection
 from aitunes.audio_processing.processing_interface import AudioProcessingInterface
 from aitunes.utils import device, normalize
-from aitunes.autoencoders.task_cases import AutoencoderTaskCase, FLAG_NONE
+from aitunes.experiments import AutoencoderExperiment
 
 import h5py
 import numpy as np
 import torch
 
-class SinewaveTaskCase(AutoencoderTaskCase):
-    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, reconstruct_audio, flatten: bool = False, flags: int = FLAG_NONE):
+class GtzanExperiment(AutoencoderExperiment):
+    """
+    The GTZAN dataset has 100 30-second samples for a wapping 10 different genres, resulting in 1000 * 30 = 30'000 seconds of music to train on
+    For this purpose, 95 samples will be split and used for the training process in each genre, while the other 5 will be used for model evaluation
+    """
+    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, reconstruct_audio, flatten: bool = False):
         """
         :param reconstruct_audio: Reconstruct an AudioProcessingInterface from a normalized spectrogram
         """
-        super().__init__("SineWave", model, weights_path, loss, optimizer, flags)
+        super().__init__("GTZAN", model, weights_path, loss, optimizer)
         self._flatten = flatten
         self.train_loader = training_data
         self.training_indices = np.arange(len(self.train_loader))
@@ -43,7 +47,7 @@ class SinewaveTaskCase(AutoencoderTaskCase):
             indices = self.training_indices
         
         complete = False
-        batch_size, current_index = 8, 0
+        batch_size, current_index = 32, 0
         while not complete:
             if current_index + batch_size >= dataset.shape[0]:
                 batch_indices = indices[current_index:]
@@ -169,5 +173,3 @@ class SinewaveTaskCase(AutoencoderTaskCase):
         self._generated_sample = None
         self._current_track = (self._current_track - 1) % self.test_loader.shape[0]
         self.display_track()
-    
-

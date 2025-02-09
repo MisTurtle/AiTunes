@@ -1,8 +1,6 @@
 import autoloader
 from os import path, listdir
 from aitunes.audio_processing import AudioProcessingInterface
-
-import numpy as np
 import matplotlib.pyplot as plt
 
 

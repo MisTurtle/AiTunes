@@ -1,1 +1,1 @@
-from .simple_audio_stream import *
+from .simple_audio_streams import *
