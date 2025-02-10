@@ -65,7 +65,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         self.generate_datasets()
         return SinewaveExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
     
-    @scenario(name="Convolutional VAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 4 dimensions")
+    @scenario(name="Convolutional VAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size. 3 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 4 dimensions")
     def cvae_core4(self):
         self.set_mode(self.low_mode)
         model = CVAE(
@@ -78,7 +78,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
 
-    @scenario(name="Convolutional VAE", version="1.0-LOW8", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 8 dimensions\nBeta = 1")
+    @scenario(name="Convolutional VAE", version="1.0-LOW8", description="Scenarios in this series aim to find a decent latent space size. 3 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 8 dimensions\nBeta = 1")
     def cvae_core8(self):
         self.set_mode(self.low_mode)
         model = CVAE(
@@ -91,7 +91,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
-    @scenario(name="Convolutional VAE", version="1.0-LOW16", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 16 dimensions\nBeta = 1")
+    @scenario(name="Convolutional VAE", version="1.0-LOW16", description="Scenarios in this series aim to find a decent latent space size. 3 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 16 dimensions\nBeta = 1")
     def cvae_core16(self):
         self.set_mode(self.low_mode)
         model = CVAE(
@@ -104,6 +104,32 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
+    @scenario(name="Convolutional VAE", version="1.0-HIGH16", description="As a latent space size of 16 seems to provide more 'creative' results when generating new tracks, this tries to see if the architecture holds for more detailed audio (High quality settings)")
+    def cvae_core16_high(self):
+        self.set_mode(self.high_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128],
+            conv_kernels=[      3,       3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2],
+            latent_space_dim=16
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+    
+    @scenario(name="Convolutional VAE", version="1.0-HIGH32", description="Seeing results from the HIGH16 version, we can easily deduce that multiple different inputs have a very close latent representation ('Trails' visible in spectrograms). This tries to fix it without changing the network's size, but by increasing the latent space size.")
+    def cvae_core32_high(self):
+        self.set_mode(self.high_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128],
+            conv_kernels=[      3,       3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2],
+            latent_space_dim=32
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+
     def __del__(self):
         self.free_resources()
 
