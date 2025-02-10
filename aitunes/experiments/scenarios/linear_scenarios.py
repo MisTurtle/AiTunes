@@ -33,12 +33,12 @@ class LinearAugmentationScenarios(ScenarioContainer):
 
     @scenario(name="Simple AE", version="1.0", description="A test to validate the SimpleAutoEncoder architecture")
     def ae(self):
-        model = SimpleAutoEncoder((5, 4, 3))
+        model = SimpleAutoEncoder((5, 3))
         loss, optimizer = mse_loss, optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
         
     @scenario(name="Simple VAE", version="1.0", description="A test to validate the Variational AutoEncoder architecture")
     def vae(self):
-        model = VariationalAutoEncoder((5, 4, 3))
+        model = VariationalAutoEncoder((5, 3))
         loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer

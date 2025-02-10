@@ -10,4 +10,4 @@ g.mainloop()
 
 # for scenario in actions.list_scenarios():
 #     actions.select_scenario(scenario)
-#     actions.train(20, 5, False)
+#     actions.train(10, 5, False)

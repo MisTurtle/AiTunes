@@ -212,6 +212,8 @@ class AutoencoderExperimentSupport:
         Adds a batch loss to the current epoch
         """
         self.batch_size = batch_size
+        if isinstance(loss, torch.Tensor):
+            loss = loss.item()
         if len(loss_components) > 0:
             loss_components = map(lambda lc: lc.detach().cpu().numpy(), loss_components)
         self.epoch_batch_losses.append((loss, *loss_components))

@@ -32,25 +32,25 @@ class MnistReconstructionScenarios(ScenarioContainer):
     
     @scenario(name="Simple AE", version="1.0", description="Train to reconstruct images from compression to a 2D plane with a simple autoencoder")
     def ae(self):
-        model = SimpleAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
+        model = SimpleAutoEncoder((28 * 28, 7 * 7, 3 * 3, 2))
         loss, optimizer = mse_loss, optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
     @scenario(name="Simple VAE", version="1.0", description="Hint the model to follow a standard random normal distribution for compressing images to a 2D plane. This allows to easily sample new points from the latent space.")
     def vae(self):
-        model = VariationalAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
+        model = VariationalAutoEncoder((28 * 28, 7 * 7, 3 * 3, 2))
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=0.1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
     @scenario(name="Simple VAE", version="1.0-KL", description="Compared to 1.0, this model gives a higher importance to the KL Divergence loss. This aims to compare the results when multiplying its impact by 10")
     def vae_kl(self):
-        model = VariationalAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
+        model = VariationalAutoEncoder((28 * 28, 7 * 7, 3 * 3, 2))
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
     @scenario(name="Simple VAE", version="1.0-REC", description="Compared to 1.0, this model gives a higher importance to the Reconstruction loss. This aims to compare the results when multiplying its impact by 10")
     def vae_rec(self):
-        model = VariationalAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
+        model = VariationalAutoEncoder((28 * 28, 7 * 7, 3 * 3, 2))
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=0.01), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
