@@ -114,22 +114,3 @@ def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
             f.create_dataset(name, data=values)
         for key, val in attrs.items():
             f.attrs[key] = val
-
-
-def simple_mse_kl_loss(prediction, target, mu, log_var, beta = 1):
-    log_var = torch.clamp(log_var, min=-10, max=10)
-    mse_loss = F.mse_loss(prediction, target, reduction='sum')
-    kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
-    return mse_loss + kl_loss * beta
-
-
-# def mse_monotonic_kl_loss(prediction, target, mu, log_var, epoch_count: int, monotonic_delay: int, alpha: int = 1):
-#     """
-#     :param epoch_count: Current training epoch count
-#     :param monotonic_delay: Delay before having a KL divergence loss with a beta factor of 1
-#     """
-#     log_var = torch.clamp(log_var, max = 10.0)  # Prevent against KL_Divergence explosion
-#     reconstruction_loss = F.mse_loss(prediction, target)
-#     KL_Divergence = torch.mean(-.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()))
-#     return alpha * reconstruction_loss + min(1., epoch_count / monotonic_delay) * KL_Divergence
-

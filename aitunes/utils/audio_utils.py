@@ -1,12 +1,19 @@
-from collections import namedtuple
-from os import path, walk
 import random
-from typing import Callable, Union
-
 import numpy as np
 import torch
+import torch.nn as nn
+
+from collections import namedtuple
+from os import path, walk
+from typing import Callable, Union
+from h5py import Dataset
+
+from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
+from matplotlib.widgets import Button
 
 from aitunes.audio_processing import PreprocessingCollection, AudioProcessingInterface
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import get_loading_char, save_dataset
 
 
@@ -113,3 +120,129 @@ def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatu
         print(f"Skipped {audio_path} due to a raised error: ", str(e))
     
     return spectrograms, labels
+
+
+def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dataset, test_labels: Dataset, model: nn.Module, loss_criterion):
+    """
+    Inspired from https://matplotlib.org/stable/gallery/widgets/buttons.html
+    
+    Loops over validation data and show a comparison between the original audio and the reproduced one
+    Controls for playing audio and switching tracks is also available
+    """
+    plt.switch_backend("TkAgg")
+
+    # State tracker
+    latent_size: int = 0
+    current_track: int = 0
+    generated_from_scratch: bool = False
+    original_spectrogram: Union[np.ndarray] = None
+    original_label: Union[None, str] = None
+    latent_sample: torch.Tensor = None
+    loss: Union[None, torch.Tensor] = None
+    og_interface: Union[None, AudioProcessingInterface] = None
+    rec_interface: AudioProcessingInterface = None
+
+    def update_state():
+        """
+        Takes the current track, generates a model prediction and creates audio interfaces for it
+        """
+        nonlocal original_spectrogram, original_label, latent_sample, og_interface, rec_interface, loss, latent_size
+
+        if generated_from_scratch:
+            rec_spec = model._decoder(latent_sample.unsqueeze(0))
+            original_spectrogram = original_label = og_interface = None
+        else:
+            original_spectrogram = test_loader[current_track]
+            original_label = test_labels[current_track].decode('UTF-8')
+            model_input = torch.tensor(original_spectrogram, dtype=torch.float32).unsqueeze(0)
+
+            if not isinstance(model, CVAE):
+                model_input = model_input.flatten(start_dim=1, end_dim=2)
+            else:
+                model_input = model_input.unsqueeze(1)
+            
+            latent_sample, rec_spec, *args = model(model_input)
+            loss, *_ = loss_criterion(model_input, rec_spec, *args)
+            og_interface = reconstruct_audio(original_spectrogram, features, label=original_label)
+            latent_size = int(latent_sample.shape[1])
+            latent_sample = latent_sample[0]
+        rec_interface = reconstruct_audio(rec_spec, features, label="Generated Track")
+        
+    # Create a new figure
+    fig = plt.figure(figsize=(14, 8.5))
+    gs = GridSpec(nrows=3, ncols=2, width_ratios=[1, 1], height_ratios=[1, 1, 1])
+    axes = [
+        fig.add_subplot(gs[0, :]),  # Wave form plot
+        fig.add_subplot(gs[1, 0]),  # Original spectrogram
+        fig.add_subplot(gs[1, 1]),  # Reconstructed spectrogram
+        fig.add_subplot(gs[2, :])   # Latent space bar plot
+    ]
+    fig.subplots_adjust(bottom=0.09, top=0.925)
+
+    # Button callbacks
+    def next_track(incr: int):
+        nonlocal current_track, generated_from_scratch, bplayog
+        bplayog.set_active(True)
+        generated_from_scratch = False
+        current_track = (current_track + incr) % test_loader.shape[0]
+        display_track()
+
+    def play_original():
+        if og_interface is not None:
+            og_interface.play()
+
+    def play_reconstructed():
+        if rec_interface is not None:
+            rec_interface.play()
+
+    def generate_track():
+        nonlocal generated_from_scratch, latent_sample, bplayog
+        bplayog.set_active(False)
+        generated_from_scratch = True
+        latent_sample = torch.randn(latent_size)
+        display_track()
+
+    def display_track(colorbar: bool = False):
+        update_state()
+        for ax in axes:
+            ax.clear()
+        
+        if generated_from_scratch:
+            fig.suptitle("Randomly generated track")
+            rec_interface.draw_wave(axes[0])
+            rec_interface.get_plot_for(['log_mel'], title="Log Mel Spectrogram", axes=axes[2], fig=fig, colorbar=colorbar)
+            axes[1].set_facecolor('lightgray')
+            axes[1].text(0.5, 0.5, 'Nothing to Show', fontsize=16, color='black', ha='center', va='center', bbox=dict(facecolor='white', alpha=0.8, edgecolor='black'))
+        else:
+            fig.suptitle(f"Summary for reconstruction of {original_label} - Loss: {loss:.3f}")
+            og_interface.compare_waves(rec_interface, ax=axes[0])
+            og_interface.get_plot_for(['log_mel'], title="Original Log Mel Spectrogram", axes=axes[1], fig=fig, colorbar=colorbar)
+            rec_interface.get_plot_for(['log_mel'], title="Reconstructed Log Mel Spectrogram", axes=axes[2], fig=fig, colorbar=colorbar)
+        
+        axes[3].title.set_text("Latent Space Representation")
+        axes[3].bar(np.arange(0, latent_size), latent_sample.cpu().tolist())
+
+
+    # Create buttons (from left to right)
+    axgenerate  = fig.add_axes([0.10, 0.025, 0.08, 0.03])
+    axreload    = fig.add_axes([0.19, 0.025, 0.08, 0.03])
+    axplayog    = fig.add_axes([0.42, 0.025, 0.08, 0.03])
+    axplayrec   = fig.add_axes([0.51, 0.025, 0.08, 0.03])
+    axprev      = fig.add_axes([0.73, 0.025, 0.08, 0.03])
+    axnext      = fig.add_axes([0.82, 0.025, 0.08, 0.03])
+
+    bnext = Button(axnext, 'Next')
+    bnext.on_clicked(lambda _: next_track(1))
+    bprev = Button(axprev, 'Previous')
+    bprev.on_clicked(lambda _: next_track(-1))
+    bplayrec = Button(axplayrec, 'Play Generated')
+    bplayrec.on_clicked(lambda _: play_reconstructed())
+    bplayog = Button(axplayog, 'Play Original')
+    bplayog.on_clicked(lambda _: play_original())
+    breload = Button(axreload, 'Regenerate')
+    breload.on_clicked(lambda _: display_track())  # This will regenerate a prediction based on the same input, eventually leading to a slightly different result due to normal distribution
+    bgenerate = Button(axgenerate, 'Create Track')
+    bgenerate.on_clicked(lambda _: generate_track())
+
+    display_track(colorbar=True)
+    plt.show()

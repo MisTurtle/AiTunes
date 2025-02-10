@@ -10,7 +10,7 @@ from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioCont
 from aitunes.experiments.cases import SinewaveExperiment
 from aitunes.audio_processing import PreprocessingCollection
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
-from aitunes.utils import simple_mse_kl_loss
+from aitunes.utils.loss_functions import simple_mse_kl_loss
 
 
 class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
@@ -64,8 +64,21 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         model, loss, optimizer = s(self)
         self.generate_datasets()
         return SinewaveExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
+    
+    @scenario(name="Convolutional VAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 4 dimensions")
+    def cvae_core4(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128, 256, 512, 1024],
+            conv_kernels=[      3,       3,    3,   3,   3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
+            latent_space_dim=4
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
 
-    @scenario(name="Convolutional VAE", version="1.0-LOW", description="This scenario attempts to recreate normalized log mel spectrograms from an 8 dimensions latent space. It is composed of 6 convolutional layers 32 to 1024 filters, 3x3 kernels, and strides of (2, 1) and (2, 2). The aim is to find a decent latent space dimension before going with more complex audio structures with the GTZAN dataset. Low quality audio is used for faster training.")
+    @scenario(name="Convolutional VAE", version="1.0-LOW8", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 8 dimensions\nBeta = 1")
     def cvae_core8(self):
         self.set_mode(self.low_mode)
         model = CVAE(
@@ -75,7 +88,20 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
             conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
             latent_space_dim=8
         )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=0.001), optim.Adam(model.parameters(), lr=0.001)
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+    
+    @scenario(name="Convolutional VAE", version="1.0-LOW16", description="Scenarios in this series aim to find a decent latent space size. 6 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 16 dimensions\nBeta = 1")
+    def cvae_core16(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128, 256, 512, 1024],
+            conv_kernels=[      3,       3,    3,   3,   3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
+            latent_space_dim=16
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
     def __del__(self):

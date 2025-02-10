@@ -137,7 +137,7 @@ class GtzanExperiment(AutoencoderExperiment):
 
             # Evaluate and predict the reconstructed spectrogram
             latent, reconstructed_spectrogram, *args = self.model(model_input)
-            loss = self._loss_criterion(model_input, reconstructed_spectrogram, *args)
+            loss, *_ = self._loss_criterion(model_input, reconstructed_spectrogram, *args)
             self._fig.suptitle(f"Comparing Evaluation Track #{self._current_track}  //  Loss: {loss:.3f}")
 
             # Fetch the audio processing interfaces from the middleware (not the cleanest but easier to implement)

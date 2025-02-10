@@ -3,7 +3,7 @@ import torch.optim as optim
 
 from os import path
 from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer, scenario
-from aitunes.utils import simple_mse_kl_loss
+from aitunes.utils.loss_functions import mse_loss, simple_mse_kl_loss
 from aitunes.experiments.cases import MnistExperiment
 from aitunes.modules import SimpleAutoEncoder, VariationalAutoEncoder, CVAE
 
@@ -33,7 +33,7 @@ class MnistReconstructionScenarios(ScenarioContainer):
     @scenario(name="Simple AE", version="1.0", description="Train to reconstruct images from compression to a 2D plane with a simple autoencoder")
     def ae(self):
         model = SimpleAutoEncoder((28 * 28, 14 * 14, 7 * 7, 3 * 3, 2))
-        loss, optimizer = nn.MSELoss(reduction="sum"), optim.Adam(model.parameters(), lr=0.001)
+        loss, optimizer = mse_loss, optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
     @scenario(name="Simple VAE", version="1.0", description="Hint the model to follow a standard random normal distribution for compressing images to a 2D plane. This allows to easily sample new points from the latent space.")

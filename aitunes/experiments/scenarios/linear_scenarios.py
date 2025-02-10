@@ -3,7 +3,7 @@ import torch.optim as optim
 
 from os import path
 from typing import Union
-from aitunes.utils import simple_mse_kl_loss
+from aitunes.utils.loss_functions import simple_mse_kl_loss, mse_loss
 from aitunes.experiments.cases import LinearExperiment
 from aitunes.modules import SimpleAutoEncoder, VariationalAutoEncoder
 from aitunes.experiments.scenarios._scenario_utils import ScenarioDescriptor, ScenarioContainer, scenario
@@ -34,7 +34,7 @@ class LinearAugmentationScenarios(ScenarioContainer):
     @scenario(name="Simple AE", version="1.0", description="A test to validate the SimpleAutoEncoder architecture")
     def ae(self):
         model = SimpleAutoEncoder((5, 4, 3))
-        loss, optimizer = nn.MSELoss(reduction="sum"), optim.Adam(model.parameters(), lr=0.001)
+        loss, optimizer = mse_loss, optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
         
     @scenario(name="Simple VAE", version="1.0", description="A test to validate the Variational AutoEncoder architecture")

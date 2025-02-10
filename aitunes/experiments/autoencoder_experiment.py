@@ -111,11 +111,11 @@ class AutoencoderExperiment(ABC):
                 self._optimizer.zero_grad()
                 # Predict with the current model state and compute the loss
                 embedding, prediction, *args = self._model(batch)
-                batch_loss: torch.Tensor = self._loss_criterion(prediction, batch, *args)
+                batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 batch_loss.backward()
                 # Run an optimizer step and log the result
                 self._optimizer.step()
-                self._support.add_batch_result(batch_loss.item() / batch.shape[0]).log_training_loss()
+                self._support.add_batch_result(batch_loss.item(), *loss_components, batch_size=batch.shape[0]).log_training_loss()
 
             self._support.log_training_loss(ended=True).next_epoch()
             # Save the model only if necessary (checks are performed in the support directly)
@@ -131,9 +131,9 @@ class AutoencoderExperiment(ABC):
         with torch.no_grad():            
             for batch, *extra in self.next_batch(training=False):
                 embedding, prediction, *args = self._model(batch)
-                batch_loss: torch.Tensor = self._loss_criterion(prediction, batch, *args)
+                batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
-                self._support.add_batch_result(batch_loss / batch.shape[0]).log_running_loss("Evaluation", False, True)
+                self._support.add_batch_result(batch_loss, *loss_components, batch_size=batch.shape[0]).log_running_loss("Evaluation", False, True)
             self._support.log_running_loss("Evaluation", True, False)
             
     @abstractmethod
@@ -150,62 +150,71 @@ class AutoencoderExperiment(ABC):
 class AutoencoderExperimentSupport:
 
     def __init__(self, name):
-        self._name = name
-        self.trained, self.plotting = False, False
-        self.total_epochs, self.ran_epochs = 0, 0
-        self.all_epoch_losses, self.current_epoch_losses = [], []
-        self.current_epoch_loss = .0
-        self.epoch_start, self.all_epoch_running_time = time.time(), []
+        self._name = name  # Name of the experiment
+        self.trained, self.plotting = False, False  # State and settings
+        self.total_epochs, self.ran_epochs = 0, 0  # Total of epochs to be performed, total epochs lived by the model
+
+        self.batch_size = 0
+        # History of loss per batch for the current epoch. List of tuples where the first value is the total loss, and following values are components making up that loss
+        self.epoch_batch_losses = []
+        # History of loss per epoch for all previous epochs. List of tuples where the first value is the total loss, and following values are components making up that loss
+        self.all_epoch_item_losses = []
+        
+        self.epoch_start, self.all_epoch_running_times = time.time(), []
+        
         self.ax, self.fig, self.plot_calls = None, None, 0
         self.save_check, self.save_path = None, None
-        self.batch_per_training_epoch = 0
-    
+        
     @property
     def prefix(self):
         return f"[{self._name}]"
+    
+    @property
+    def current_epoch_batch_count(self):
+        return len(self.epoch_batch_losses)
 
     @property
-    def epoch_loss(self):
-        """
-        Average loss per item during this epoch
-        """
-        return sum(self.current_epoch_losses)
+    def current_epoch_loss(self) -> tuple[float, ...]:
+        return np.sum(self.epoch_batch_losses, axis=0)
+    
+    @property
+    def current_average_batch_loss(self) -> tuple[float, ...]:
+        return np.mean(self.epoch_batch_losses, axis=0)
+    
+    @property
+    def current_average_item_loss(self) -> tuple[float, ...]:
+        if self.batch_size == 0:
+            return np.zeros_like(self.current_average_batch_loss)
+        return self.current_average_batch_loss / self.batch_size
 
     @property
-    def epoch_batches(self):
-        return len(self.current_epoch_losses)
-
-    @property
-    def epoch_runtime(self):
+    def current_epoch_runtime(self):
         return time.time() - self.epoch_start
     
-    def set_batch_size(self, batch_size: int) -> 'AutoencoderExperimentSupport':
-        self.batch_per_training_epoch = batch_size
-        return self
-    
     def blank_epoch(self) -> 'AutoencoderExperimentSupport':
-        self.current_epoch_losses.clear()
+        self.epoch_batch_losses.clear()
         self.epoch_start = time.time()
         return self
     
     def next_epoch(self) -> 'AutoencoderExperimentSupport':
         self.ran_epochs += 1
-        self.all_epoch_losses.append(self.epoch_loss)
-        self.all_epoch_running_time.append(self.epoch_runtime)
+        self.all_epoch_item_losses.append(self.current_average_item_loss)
+        self.all_epoch_running_times.append(self.current_epoch_runtime)
         self.plot_loss_progress(1)
-        if not self.trained:
-            self.set_batch_size(self.epoch_batches)
         return self.blank_epoch()
     
     def add_total_epochs(self, n: int) -> 'AutoencoderExperimentSupport':
         self.total_epochs += n
         return self
     
-    def add_batch_result(self, loss: float) -> 'AutoencoderExperimentSupport':
+    def add_batch_result(self, loss: float, *loss_components: torch.Tensor, batch_size: int) -> 'AutoencoderExperimentSupport':
         """
-        Add the average loss per item to the current epoch history
+        Adds a batch loss to the current epoch
         """
-        self.current_epoch_losses.append(loss)
+        self.batch_size = batch_size
+        if len(loss_components) > 0:
+            loss_components = map(lambda lc: lc.detach().cpu().numpy(), loss_components)
+        self.epoch_batch_losses.append((loss, *loss_components))
         return self
     
     # SAVING FUNCTIONS BELOW
@@ -217,7 +226,7 @@ class AutoencoderExperimentSupport:
         """
         :param save_to_path_fn: A function taking a path as a parameter and saving weights of the model there
         """
-        should_save = self.save_check is not None and self.save_check(self.ran_epochs, self.epoch_loss)
+        should_save = self.save_check is not None and self.save_check(self.ran_epochs, self.current_epoch_loss)
         force_save = self.ran_epochs == self.total_epochs
         should_save |= force_save  # Always save if the training is about to end
         
@@ -237,17 +246,18 @@ class AutoencoderExperimentSupport:
         save_to_path_fn(path.join(dir_path, f"checkpoint_{self.ran_epochs}.pth" if not force_save else f"release_{self.ran_epochs}.pth"))
 
         # Save the training progress
-        epoch_ids = ['Epoch #', *np.arange(self.ran_epochs - len(self.all_epoch_losses), self.ran_epochs)]
-        epoch_losses = ['Total Loss', *self.all_epoch_losses]
-        if self.batch_per_training_epoch is not None and self.batch_per_training_epoch > 0:
-            epoch_avg_losses = ['Avg Loss', *map(lambda x: x / self.batch_per_training_epoch, self.all_epoch_losses)]
-        else:
-            epoch_avg_losses = epoch_losses
-        epoch_duration = ['Runtime', *self.all_epoch_running_time]
+        all_epoch_item_losses = np.array(self.all_epoch_item_losses)
+        epoch_ids = ['Epoch #', *np.arange(self.ran_epochs - len(self.all_epoch_item_losses), self.ran_epochs)]
+        epoch_durations = ['Runtime', *self.all_epoch_running_times]
+        epoch_avg_item_losses = ['Item Loss', *all_epoch_item_losses[:, 0]]
+        epoch_avg_item_loss_components = [
+            [f"Component #{i + 1}"] + all_epoch_item_losses[:, i + 1].tolist()
+            for i in range(all_epoch_item_losses.shape[1] - 1)
+        ]
 
         np.savetxt(
             path.join(dir_path, "progress.csv"),
-            [row for row in zip(epoch_ids, epoch_losses, epoch_avg_losses, epoch_duration)],
+            [row for row in zip(epoch_ids, epoch_durations, epoch_avg_item_losses, *epoch_avg_item_loss_components)],
             delimiter=",",
             fmt="%s"
         )
@@ -275,7 +285,10 @@ class AutoencoderExperimentSupport:
 
         plt.ion()
         self.ax.clear()
-        self.ax.plot(self.all_epoch_losses, label="Training Loss")
+        losses = np.array(self.all_epoch_item_losses)
+        self.ax.plot(losses[:, 0], label="Avg Item Loss")
+        for i in range(losses.shape[1] - 1):
+            self.ax.plot(losses[:, i + 1], label=f"Component #{i + 1}")
         self.ax.set_xlabel("Epoch")
         self.ax.set_ylabel("Loss")
         self.ax.set_title(f"{self._name} Training Loss (Live Plot)")
@@ -292,8 +305,13 @@ class AutoencoderExperimentSupport:
         return self
     
     def get_running_loss_line(self, prefix: str):
-        el = self.epoch_loss
-        return f"{self.prefix} [{prefix}] Running time: {self.epoch_runtime:.2f}s... Epoch loss: {el:.2f}... Avg. Loss per item: {el / max(1, self.epoch_batches):.4f}"
+        epoch_loss = self.current_epoch_loss
+        item_loss = self.current_average_item_loss
+        epoch_loss_str = f"Epoch loss: {epoch_loss[0]:.2f}..."
+        item_loss_str = f"Item Loss: {item_loss[0]:.4f}"
+        for component_id in range(item_loss.shape[0] - 1):
+            item_loss_str += f"... Comp #{component_id}: {item_loss[component_id + 1]:.4f}"
+        return f"{self.prefix} [{prefix}] Ran: {self.current_epoch_runtime:.2f}s... {epoch_loss_str} {item_loss_str}"
 
     def log_running_loss(self, prefix: str, new_line: bool = False, loading: bool = True) -> 'AutoencoderExperimentSupport':
         line = self.get_running_loss_line(prefix)

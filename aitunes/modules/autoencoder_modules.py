@@ -169,8 +169,8 @@ class CVAE(nn.Module):
 
         padding, (p_h, p_w) = self._compute_decoder_padding(0)
         layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=padding, output_padding=(p_h, p_w)))
-        # layers.append(nn.Sigmoid())
-        layers.append(nn.ReLU())
+        layers.append(nn.Sigmoid())
+        # layers.append(nn.ReLU())
         return nn.Sequential(*layers)
     
     def _calculate_shape_before_bottleneck(self):
