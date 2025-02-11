@@ -71,6 +71,7 @@ class HeadlessActionPipeline:
         if experiment is None:
             return False
         self._selected_experiment = experiment
+        self.close_scenario()
         return True
     
     def close_experiment(self):

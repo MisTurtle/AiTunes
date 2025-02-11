@@ -42,7 +42,7 @@ class GtzanExperiment(AutoencoderExperiment):
         batch_size, current_index = 16, 0
         while not complete:
             if current_index + batch_size >= dataset.shape[0]:
-                batch_indices = indices[current_index:]
+                batch_indices = np.concatenate((indices[current_index:], indices[:batch_size + current_index - dataset.shape[0]]))
                 complete = True
             else:
                 batch_indices = indices[current_index:current_index + batch_size]

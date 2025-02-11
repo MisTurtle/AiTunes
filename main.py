@@ -6,8 +6,8 @@ g.mainloop()
 # from aitunes.user_controls.headless import HeadlessActionPipeline
 
 # actions = HeadlessActionPipeline()
-# actions.select_experiment('MnistReconstruction')
 
+# actions.select_experiment('GtzanReconstruction')
 # for scenario in actions.list_scenarios():
 #     actions.select_scenario(scenario)
-#     actions.train(10, 5, False)
+#     actions.train(200, 0, False)
