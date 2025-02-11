@@ -1,181 +1,99 @@
-import random
 import h5py
 import numpy as np
-import torch
 import torch.optim as optim
 
-from os import makedirs, walk, path
-from typing import Literal, Union
+from os import path
 
-from aitunes.utils import download_and_extract, get_loading_char, save_dataset, simple_mse_kl_loss
+from aitunes.modules import CVAE
+from aitunes.audio_processing import PreprocessingCollection
+
 from aitunes.experiments.cases import GtzanExperiment
-from aitunes.modules import VariationalAutoEncoder, CVAE
-from aitunes.audio_processing import AudioProcessingInterface, PreprocessingCollection
+from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
+
+from aitunes.utils import download_and_extract
+from aitunes.utils.loss_functions import simple_mse_kl_loss
+from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
 
 
-# File system paths
-dataset_path = path.join("assets", "Samples", "GTZAN")
-audio_dataset_path = path.join(dataset_path, "genres_original")
+class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
 
-# -- For log spectrograms
-log_precomputed_spectrograms_path = path.join(dataset_path, "spectrograms")
-log_training_set_path, log_evaluation_set_path = path.join(log_precomputed_spectrograms_path, "training_set.h5"), path.join(log_precomputed_spectrograms_path, "evaluation_set.h5")
+    @staticmethod
+    def get_path_to_history_root():
+        return path.join("history", "gtzan")
 
-# -- For log mel spectrograms
-mel_precomputed_spectrograms_path = path.join(dataset_path, "mel_spectrograms")
-mel_training_set_path, mel_evaluation_set_path = path.join(mel_precomputed_spectrograms_path, "training_set.h5"), path.join(mel_precomputed_spectrograms_path, "evaluation_set.h5")
+    @staticmethod
+    def get_path_to_release_root():
+        return path.join("assets", "Models", "gtzan")
 
-# -- Constant accross
-comparison_path = path.join("assets", "Samples", "generated", "gtzan")
-makedirs(comparison_path, exist_ok=True)
+    @staticmethod
+    def get_identifier():
+        return "GtzanReconstruction"
 
-# Audio and model variables
-epochs = 200
+    @staticmethod
+    def get_description():
+        return "Our original training dataset for music generation. It is composed of 1000 compositions accross 10 different music styles."
 
-# Features settings for each mode
-n_mels, n_fft, hop_length, sample_duration, sample_rate, sample_per_item = 128, 1024, 512, 1., 22050, 5
-
-log_expected_spectrogram_size = int(n_fft // 2) + 1, int(sample_duration * sample_rate // hop_length) + 1
-log_flat_expected_spectrogram_size = log_expected_spectrogram_size[0] * log_expected_spectrogram_size[1]
-
-mel_expected_spectrogram_size = n_mels, int(sample_duration * sample_rate // hop_length) + 1
-mel_flat_expected_spectrogram_size = mel_expected_spectrogram_size[0] * mel_expected_spectrogram_size[1]
-
-# Directly usable settings (Mapped to the right value when switching modes)
-expected_spectrogram_size, flat_expected_spectrogram_size = log_expected_spectrogram_size, mel_expected_spectrogram_size
-creation_mode = "log_spec"
-dB_bounds = -0.7, 0.7  # Spectrograms are mapped to this range once audio is recreated. Can be fine tuned later on
-spec_bounds = -80, 0  # Bounds used to reconstruct audio from a normalized spectrogram. -80db to 0db
-
-# H5 file instances
-training_h5_file, evaluation_h5_file = None, None
-
-# Save and history paths
-release_root = path.join("assets", "Models", "gtzan")
-history_root = path.join("history", "gtzan")
-
-
-def switch_mode(mode: Literal["log", "mel"]):
-    global training_h5_file, evaluation_h5_file, expected_spectrogram_size, flat_expected_spectrogram_size, creation_mode
-    match mode:
-        case "log":
-            training_h5_file, evaluation_h5_file = h5py.File(log_training_set_path, "r+"), h5py.File(log_evaluation_set_path, "r+")
-            expected_spectrogram_size, flat_expected_spectrogram_size = log_expected_spectrogram_size, flat_expected_spectrogram_size
-            creation_mode = "log_spec"
-        case "mel":
-            training_h5_file, evaluation_h5_file = h5py.File(mel_training_set_path, "r+"), h5py.File(mel_evaluation_set_path, "r+")
-            expected_spectrogram_size, flat_expected_spectrogram_size = mel_expected_spectrogram_size, mel_flat_expected_spectrogram_size
-            creation_mode = "log_mel"
-    print(f"/!\\ Mode switched to `{mode}`")
-
-
-def initial_setup():
-    global training_h5_file, evaluation_h5_file
-    # Ensure the dataset is downloaded at the expected location
-    download_and_extract(
-        url="https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification",
-        target_path=dataset_path,
-        zip_path=path.join(dataset_path, "..", "GTZAN_Dataset.zip"),
-        final_size=1241.20,  # Dataset final size is 1.241 GB
-        standalone_zipped_dir="Data",  # A Data folder is at the root of the downloaded zip file
-        clean=True  # Cleanup the downloaded zip file once finished
-    )
-
-    # Check if spectrograms have been precomputed
-    if not all(map(lambda x: path.exists(x), [log_training_set_path, log_evaluation_set_path, mel_training_set_path, mel_evaluation_set_path])):
-        evaluation_data_size = 10 * sample_per_item  # (1000 items in the dataset, 100 used for evaluation)
-        all_spectrograms, all_bounds, all_mel_spectrograms, all_mel_bounds = [], [], [], []
-        for root, _, files in walk(audio_dataset_path):
-            for filename in files:  # Loop over audio files in the dataset
-                print(f"\r{get_loading_char()} Precomputing {filename}..." + " " * 10, end='')
-                spectrograms, bounds, mel_spectrograms, mel_bounds = preprocess(path.join(root, filename))
-                all_spectrograms += spectrograms
-                all_bounds += bounds
-                all_mel_spectrograms += mel_spectrograms
-                all_mel_bounds += mel_bounds
-        
-        print("\rSpectrograms precomputed. Saving as HDF5 datasets...")
-        # attrs = {"n_fft": n_fft, "hop_length": hop_length, "sample_duration": sample_duration, "sample_rate": sample_rate}  # Might be useful to store those? Meh maybe not
-        
-        all_data = list(zip(all_spectrograms, all_bounds))
-        random.shuffle(all_data)
-        all_spectrograms, all_bounds = zip(*all_data)
-
-        all_data = list(zip(all_mel_spectrograms, all_mel_bounds))
-        random.shuffle(all_data)
-        all_mel_spectrograms, all_mel_bounds = zip(*all_data)
-
-        # Save all 4 datasets
-        save_dataset(log_training_set_path, {
-            "spectrograms": np.array(all_spectrograms[evaluation_data_size:]),
-            "bounds": np.array(all_bounds[evaluation_data_size:])
-        }, attrs={})
-        save_dataset(log_evaluation_set_path, {
-            "spectrograms": np.array(all_spectrograms[:evaluation_data_size]),
-            "bounds": np.array(all_bounds[:evaluation_data_size])
-        }, attrs={})
-        save_dataset(mel_training_set_path, {
-            "spectrograms": np.array(all_mel_spectrograms[evaluation_data_size:]),
-            "bounds": np.array(all_mel_bounds[evaluation_data_size:])
-        }, attrs={})
-        save_dataset(mel_evaluation_set_path, {
-            "spectrograms": np.array(all_mel_spectrograms[:evaluation_data_size]),
-            "bounds": np.array(all_mel_bounds[:evaluation_data_size])
-        }, attrs={})
-    else:
-        print(f"Precomputed spectrograms found at {log_precomputed_spectrograms_path}")
+    def __init__(self):
+        super().__init__()
+        self.audio_duration = 10.  # Seconds
+        self.low_mode = LowResolutionAudioFeatures(self.audio_duration)
+        self.high_mode = HighResolutionAudioFeatures(self.audio_duration)
+        self.training_file: h5py.File = None
+        self.evaluation_file: h5py.File = None
     
+    def free_resources(self):
+        if self.training_file is not None:
+            self.training_file.close()
+        if self.evaluation_file is not None:
+            self.evaluation_file.close()
+    
+    def generate_datasets(self):
+        if not path.exists(path_to_audios):
+            # Download and extract the dataset
+            download_and_extract(  # TODO: This is the only thing that differs, merge with sinewave scenarios somehow
+                url="https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification",
+                target_path=path_to_dataset,
+                zip_path=path.join(path_to_dataset, "..", "GTZAN_Dataset.zip"),
+                final_size=1241.20,  # Dataset final size is 1.241 GB
+                standalone_zipped_dir="Data",  # A Data folder is at the root of the downloaded zip file
+                clean=True  # Cleanup the downloaded zip file once finished
+            )
+        self.free_resources()
+        if self.get_mode() == self.high_mode:
+            precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[0], path_to_eval_spectrograms[0], 0.05, self.high_mode, preprocess_audio, preprocess_spectrogram)
+            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[0], mode='r+'), h5py.File(path_to_eval_spectrograms[0], mode='r+')
+        elif self.get_mode() == self.low_mode:
+            precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[1], path_to_eval_spectrograms[1], 0.5, self.low_mode, preprocess_audio, preprocess_spectrogram)
+            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[1], mode='r+'), h5py.File(path_to_eval_spectrograms[1], mode='r+')
 
-def preprocess(audio_path: str):
-    """
-    Preprocess a file and return the precomputed spectrogram data as well as its original bounds
-    :param path: Path to the .wav file
-    """
-    # Saving bounds seems actually kind of useless as every file in the dataset is normalized to [-80, 0] dB. But at least the system is in place for future expansion if necessary 
-    spectrograms, bounds, mel_spectrograms, mel_bounds = [], [], [], []
-    try:
-        i = AudioProcessingInterface.create_for(audio_path, mode='file', sr=sample_rate)
-        # Cut out the audio in small samples of appropriate duration
-        for start in range(0, int(min(float(sample_per_item), i.duration / sample_duration))):
-            # Cut out the window into the audio
-            window = i.extract_window(sample_duration, method="bounded", start=start * sample_duration)
-            window.preprocess(preprocess_audio)
-            
-            # Compute its spectrogram
-            spect = window.log_spectrogram(n_fft=n_fft, hop_length=hop_length) 
-            bounds.append([spect.min(), spect.max()])
-            spect = preprocess_spectrogram(spect)
-            
-            # Compute its mel spectrogram
-            mel_spect = window.log_mel_spectrogram(n_mels=n_mels, n_fft=n_fft, hop_length=hop_length)
-            
-            # Test before going forward with the whole dataset
-            # w = AudioProcessingInterface.create_for("", "log_mel", data=mel_spect, n_fft=n_fft, hop_length=hop_length, sr=sample_rate)
-            # w.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-            # window.play(blocking=True)
-            # w.play(blocking=True)
+    def instantiate(self, s, model_path):
+        self.set_mode(None)
+        model, loss, optimizer = s(self)
+        self.generate_datasets()
+        return GtzanExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
+    
+    @scenario(name="Convolutional VAE", version="1.0-LOW16", description="First real attempt at learning from the GTZAN dataset after model structures have been fixed. Low quality is used for faster training. Latent space size is 16 and only 3 convolutionnal layers are used.")
+    def cvae_core16(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128],
+            conv_kernels=[      3,       3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2],
+            latent_space_dim=16
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
 
-            mel_bounds.append([mel_spect.min(), mel_spect.max()])
-            mel_spect = preprocess_spectrogram(mel_spect)
-            
-            if spect is None or mel_spect is None:
-                raise Exception("Failed to preprocess spectrogram")
-            
-            # Save to file
-            spectrograms.append(spect)
-            mel_spectrograms.append(mel_spect)
-    except Exception as e:
-        print(f"Skipped {audio_path} due to a raised error: ", e)
-        return [], [], [], []
-    return spectrograms, bounds, mel_spectrograms, mel_bounds
+    def __del__(self):
+        self.free_resources()
+
 
 def preprocess_audio(y: np.ndarray):
     """
     Preprocessing applied directly to the audio data before precomputing the spectrogram
     :param y: The raw audio data
     """
-    # high = PreprocessingCollection.apply_highpass_filter(y, sample_rate, 512)
-    # band = PreprocessingCollection.apply_lowpass_filter(high, sample_rate, 6000)
     return y
 
 def preprocess_spectrogram(y: np.ndarray):
@@ -185,101 +103,9 @@ def preprocess_spectrogram(y: np.ndarray):
     """
     return PreprocessingCollection.normalise(y, 0, 1)
 
-def save_model_prediction(og: torch.Tensor, pred: torch.Tensor, embed: torch.Tensor, labels: list, _):
-    """
-    A middleware applied to verification data to save and compare audio between the original normalized spectrogram and the generated one
-    """
-    print("")  # Console formatting
-
-    for k in range(og.shape[0]):
-        spec_id = labels[0][k]
-        print(f"\r{get_loading_char()} Reconstructing audio #{str(spec_id).zfill(3)}...", end='')
-
-        normalized_spect = og[k]
-        reconstruct_audio(normalized_spect, spec_id).save(path.join(comparison_path, f"original_{spec_id}.wav"))
-        normalized_spect = pred[k]
-        reconstruct_audio(normalized_spect, spec_id).save(path.join(comparison_path, f"generated_{spec_id}.wav"))
-
-
-def reconstruct_audio(normalized_spectrogram: torch.Tensor, spec_id: int = -1, label: Union[str, None] = None) -> AudioProcessingInterface:
-    if spec_id < 0:
-        bounds = spec_bounds
-    else:
-        bounds = evaluation_h5_file["bounds"][spec_id]
-
-    normalized_spectrogram = normalized_spectrogram.reshape(expected_spectrogram_size)
-    denormalized_spect = PreprocessingCollection.denormalise(normalized_spectrogram, bounds[0], bounds[1])
-
-    if isinstance(denormalized_spect, torch.Tensor):
-        denormalized_spect = denormalized_spect.cpu().numpy()
-
-    i = AudioProcessingInterface.create_for("", mode=creation_mode, data=denormalized_spect, sr=sample_rate, n_fft=n_fft, hop_length=hop_length, label=label or f"Audio #{spec_id}")
-    i.preprocess(lambda wave: PreprocessingCollection.denormalise(wave, dB_bounds[0], dB_bounds[1]))
-    i.preprocess(preprocess_audio)
-    return i
-
-
-def vae_l16(evaluate: bool = True, interactive: bool = True):
-    switch_mode("log")
-
-    model_path = path.join(release_root, "vae_gtzan_l16.pth")
-    history_path = path.join(history_root, "vae_l16")
-
-    model = VariationalAutoEncoder((
-        log_flat_expected_spectrogram_size,
-        log_flat_expected_spectrogram_size // 8,
-        log_flat_expected_spectrogram_size // 16,
-        log_flat_expected_spectrogram_size // 32,
-        16
-    ))
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=100000), optim.Adam(model.parameters(), lr=0.001)
-    
-    task = GtzanExperiment(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=True, flags=flags)
-    task.add_middleware(save_model_prediction)
-    task.save_every(50, history_path)
-
-    if not task.trained:
-        task.train(epochs)
-    if evaluate:
-        task.evaluate()
-    if interactive:
-        task.interactive_evaluation()
-
-
-def cvae_v1(mode: Literal["log", "mel"], evaluate: bool = True, interactive: bool = True):
-    switch_mode(mode)
-    model_path = path.join(release_root, f"{mode}_cvae_gtzan_v1.pth")
-    # model_path = "history\\gtzan\\mel_cvae_gtzan_v1\\20250205_140922\\model.pth"
-    history_path = path.join(history_root, f"{mode}_cvae_gtzan_v1")
-    
-    model = CVAE(
-        input_shape=[1, *expected_spectrogram_size],
-        conv_filters=[     32,      64,  128, 256, 512, 1024],
-        conv_kernels=[      3,       3,    3,   3,   3,   3],
-        conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,   2],
-        latent_space_dim=32
-    )
-    loss, optimizer = lambda *args: simple_mse_kl_loss(*args, alpha=1000000), optim.Adam(model.parameters(), lr=0.0001)
-    # loss, optimizer = lambda *args: mse_monotonic_kl_loss(*args, alpha=10, epoch_count=task._support.ran_epochs, monotonic_delay=epochs//2), optim.Adam(model.parameters(), lr=0.0001)
-    
-    task = GtzanExperiment(model, model_path, loss, optimizer, training_h5_file["spectrograms"], evaluation_h5_file["spectrograms"], reconstruct_audio, flatten=False, flags=flags)
-    task.add_middleware(save_model_prediction)
-    task.save_every(50, history_path)
-    
-    task.train(epochs)
-    if evaluate:
-        task.evaluate()
-    if interactive:
-        task.interactive_evaluation()
-
-
-if __name__ == "__main__":
-    initial_setup()
-    
-    # vae_l16(evaluate=False)
-    cvae_v1(mode="mel", evaluate=True)
-
-    if training_h5_file is not None:
-        training_h5_file.close()
-    if evaluation_h5_file is not None:
-        evaluation_h5_file.close()
+# Path to the dataset and precomputed mel spectograms (high_res_path, low_res_path)
+path_to_dataset = path.join("assets", "Samples", "GTZAN")  # Dataset source path
+path_to_audios = path.join(path_to_dataset, "genres_original")  # Path to the dataset's audio files
+path_to_spectrograms = path.join(path_to_dataset, "spectrograms")
+path_to_training_spectrograms = path.join(path_to_spectrograms, "training_high.h5"), path.join(path_to_spectrograms, "training_low.h5")
+path_to_eval_spectrograms = path.join(path_to_spectrograms, "eval_high.h5"), path.join(path_to_spectrograms, "eval_low.h5")

@@ -71,7 +71,7 @@ def precompute_spectrograms_for_audio_folder(
     for root, _, files in walk(audio_folder):
         for filename in files:  # Loop over audio files in the dataset
             print(f"\r{get_loading_char()} Precomputing {filename}..." + " " * 10, end="")
-            spectrograms, labels = precompute_spectrograms_for_audio_file(path.join(audio_folder, filename), features, audio_preprocessing, spec_preprocessing)
+            spectrograms, labels = precompute_spectrograms_for_audio_file(path.join(root, filename), features, audio_preprocessing, spec_preprocessing)
             all_spectrograms += spectrograms
             all_labels += labels
 
