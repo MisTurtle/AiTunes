@@ -61,10 +61,10 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         self.free_resources()
         if self.get_mode() == self.high_mode:
             precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[0], path_to_eval_spectrograms[0], 0.05, self.high_mode, preprocess_audio, preprocess_spectrogram)
-            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[0], mode='r+'), h5py.File(path_to_eval_spectrograms[0], mode='r+')
+            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[0], mode='r'), h5py.File(path_to_eval_spectrograms[0], mode='r')
         elif self.get_mode() == self.low_mode:
             precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[1], path_to_eval_spectrograms[1], 0.05, self.low_mode, preprocess_audio, preprocess_spectrogram)
-            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[1], mode='r+'), h5py.File(path_to_eval_spectrograms[1], mode='r+')
+            self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[1], mode='r'), h5py.File(path_to_eval_spectrograms[1], mode='r')
 
     def instantiate(self, s, model_path):
         self.set_mode(None)
