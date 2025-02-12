@@ -14,7 +14,7 @@ import requests
 import torch
 import torch.nn.functional as F
 
-
+quiet: bool = False
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 loading_cycle = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
@@ -87,7 +87,8 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
                 if chunk:
                     dl_size += len(chunk) / one_mb
                     file.write(chunk)
-                    print(f"\r{get_loading_char()} {dl_size:.2f} MB{dl_suffix(dl_size)}", end='')
+                    if not quiet:
+                        print(f"\r{get_loading_char()} {dl_size:.2f} MB{dl_suffix(dl_size)}", end='')
 
         print(f"\rDownload complete. Extracting to {target_path}")
         makedirs(target_path)

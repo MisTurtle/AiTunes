@@ -10,6 +10,7 @@ all_scenarios = {
         LinearAugmentationScenarios,
         MnistReconstructionScenarios,
         SinewaveReconstructionScenarios,
-        GtzanReconstructionScenarios
+        GtzanReconstructionScenarios,
+        FmaReconstructionScenarios
     ]
 }

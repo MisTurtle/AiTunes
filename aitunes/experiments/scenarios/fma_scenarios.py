@@ -1,14 +1,17 @@
 import h5py
 import numpy as np
+import torch.optim as optim
 
 from os import path
 
 from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.audio_processing import PreprocessingCollection
-from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer
+from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
 
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import download_and_extract
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
+from aitunes.utils.loss_functions import simple_mse_kl_loss
 
 
 class FmaReconstructionScenarios(AudioBasedScenarioContainer):
@@ -31,7 +34,7 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
 
     def __init__(self):
         super().__init__()
-        self.audio_duration = 10.  # Seconds
+        self.audio_duration = 5.  # Seconds
         self.low_mode = LowResolutionAudioFeatures(self.audio_duration)
         self.high_mode = HighResolutionAudioFeatures(self.audio_duration)
         self.training_file: h5py.File = None
@@ -67,6 +70,19 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
         model, loss, optimizer = s(self)
         self.generate_datasets()
         return SpectrogramBasedAutoencoderExperiment("FMA", model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), 16)
+
+    @scenario(name="FMA CVAE", version="1.0-LOW32", description="")
+    def cvae_core32(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
+            latent_space_dim=64
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
 
     def __del__(self):
         self.free_resources()

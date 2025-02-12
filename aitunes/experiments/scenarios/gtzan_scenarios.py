@@ -73,7 +73,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         return SpectrogramBasedAutoencoderExperiment("GTZAN", model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), 16)
       
     @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="")
-    def cvae_core16_6conv_2strides(self):
+    def cvae_core16(self):
         self.set_mode(self.low_mode)
         model = CVAE(
             input_shape=[1, *self.get_mode().spectrogram_size],
@@ -86,7 +86,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         return model, loss, optimizer
 
     @scenario(name="GTZAN CVAE", version="1.0-LOW32", description="")
-    def cvae_core32_6conv_2strides(self):
+    def cvae_core32(self):
         self.set_mode(self.low_mode)
         model = CVAE(
             input_shape=[1, *self.get_mode().spectrogram_size],
@@ -94,6 +94,19 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
             conv_kernels=[  3,  3,   3,   3,   3,    3],
             conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
             latent_space_dim=32
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+    
+    @scenario(name="GTZAN CVAE", version="1.0-LOW64", description="")
+    def cvae_core64(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
+            latent_space_dim=64
         )
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer

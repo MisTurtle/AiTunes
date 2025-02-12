@@ -1,16 +1,35 @@
+import argparse
+import aitunes.utils as utils
 from aitunes.user_controls.gui import GUI
+from aitunes.user_controls.headless import HeadlessActionPipeline
 
-g = GUI()
-g.mainloop()
+parser = argparse.ArgumentParser(description="AiTunes Job Submission Endpoint")
+actions = HeadlessActionPipeline()
 
-# from aitunes.user_controls.headless import HeadlessActionPipeline
+parser.add_argument("--headless", action="store_true", help="Run without GUI")
+parser.add_argument("--experiment", "-E", type=str, help="Name of the experiment (Required with Headless)")
+parser.add_argument("--scenario", "-S", type=str, help="Which scenario to load (Required with Headless)")
+parser.add_argument("--model", "-M", type=str, help="A path to the model that needs to be loaded (No specifying it will use the latest available, if any) (Optional, default=none)")
+parser.add_argument("--epochs", "-e", type=int, help="How many epochs to train the model (Required with Headless)")
+parser.add_argument("--save_every", "-s", type=int, default=0, help="How often to create a checkpoint during training. 0 means no checkpoint is created until the end of training (Optional, default=0)")
+parser.add_argument("--quiet", "-Q", action="store_true", help="Disable training progress updates (Optional, recommended for job submission)")
 
-# actions = HeadlessActionPipeline()
-# actions.select_experiment('GtzanReconstruction')
-# actions.select_scenario('gtzan_cvae_v1.2-LOW32')
-# actions.select_model('history\\gtzan\\gtzan_cvae_v1.2-LOW32\\20250212_113617\\checkpoint_75.pth')
-# actions.train(25, 0, False)
+if __name__ == "__main__":
+    args = parser.parse_args()
+    utils.quiet = args.quiet
 
-# actions.select_experiment('GtzanReconstruction')
-# actions.select_scenario('gtzan_cvae_v1.2-LOW16')
-# actions.train(200, 50, False)
+    if args.headless:
+        if not actions.select_experiment(args.experiment):
+            parser.error(f"Experiment {args.experiment} does not exist. Choices are: \n - {'\n - '.join(actions.list_scripted_experiments())}")
+        if not actions.select_scenario(args.scenario):
+            parser.error(f"Scenario {args.scenario} does not exist. Choices are: \n - {'\n - '.join(map(lambda x: x.identifier, actions.list_scenarios()))}")
+        if args.model is not None and args.model.lower() != "none" and not actions.select_model(args.model):
+            parser.error(f"Model {args.model} was not found. Choices are: \n - {'\n - '.join(actions.list_models())}")
+        if args.epochs < 0:
+            parser.error(f"Epoch number should be higher than 0, but {args.epochs} was provided.")
+        if args.save_every < 0:
+            parser.error(f"Checkpoint period should be higher than 0, but {args.save_every} was provided.")
+
+        actions.train(args.epochs, args.save_every, False)
+    else:
+        GUI().mainloop()

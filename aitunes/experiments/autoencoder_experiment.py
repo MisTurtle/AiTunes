@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 import h5py
+import aitunes.utils as utils
 from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import get_loading_char
 from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
@@ -312,10 +313,14 @@ class AutoencoderExperimentSupport:
     # LOGGING FUNCTIONS BELOW
 
     def log(self, msg: str) -> 'AutoencoderExperimentSupport':
+        # Direct logging is still kept to keep some feedback
         print(f"{self.prefix} {msg}")
         return self
     
     def get_running_loss_line(self, prefix: str):
+        if utils.quiet:
+            return
+        
         epoch_loss = self.current_epoch_loss
         item_loss = self.current_average_item_loss
         epoch_loss_str = f"Epoch loss: {epoch_loss[0]:.2f}..."
@@ -325,6 +330,9 @@ class AutoencoderExperimentSupport:
         return f"{self.prefix} [{prefix}] Ran: {self.current_epoch_runtime:.2f}s... {epoch_loss_str} {item_loss_str}"
 
     def log_running_loss(self, prefix: str, new_line: bool = False, loading: bool = True) -> 'AutoencoderExperimentSupport':
+        if utils.quiet:
+            return self
+        
         line = self.get_running_loss_line(prefix)
         if loading:
             line = get_loading_char() + " " + line
@@ -334,7 +342,8 @@ class AutoencoderExperimentSupport:
         return self
     
     def log_training_loss(self, ended: bool = False) -> 'AutoencoderExperimentSupport':
-        self.log_running_loss(f"Epoch {self.ran_epochs + 1}/{self.total_epochs}", ended, not ended)
+        if not utils.quiet:
+            self.log_running_loss(f"Epoch {self.ran_epochs + 1}/{self.total_epochs}", ended, not ended)
         return self
     
 
@@ -388,10 +397,10 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
             print("Wait a moment while the first audio is being processed...")
             audio_model_interactive_evaluation(
                 features=self.mode,
-                test_loader=self.test_loader,
-                test_labels=self.test_labels,
-                # test_loader=self.train_loader,
-                # test_labels=self.train_labels,
+                # test_loader=self.test_loader,
+                # test_labels=self.test_labels,
+                test_loader=self.train_loader,
+                test_labels=self.train_labels,
                 model=self.model,
                 loss_criterion=self._loss_criterion
             )

@@ -2,6 +2,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import aitunes.utils as utils
 
 from collections import namedtuple
 from os import path, walk
@@ -70,7 +71,8 @@ def precompute_spectrograms_for_audio_folder(
     all_spectrograms, all_labels = [], []
     for root, _, files in walk(audio_folder):
         for filename in files:  # Loop over audio files in the dataset
-            print(f"\r{get_loading_char()} Precomputing {filename}..." + " " * 10, end="")
+            if not utils.quiet:
+                print(f"\r{get_loading_char()} Precomputing {filename}..." + " " * 10, end="")
             spectrograms, labels = precompute_spectrograms_for_audio_file(path.join(root, filename), features, audio_preprocessing, spec_preprocessing)
             all_spectrograms += spectrograms
             all_labels += labels
@@ -199,7 +201,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         nonlocal generated_from_scratch, latent_sample, bplayog
         bplayog.set_active(False)
         generated_from_scratch = True
-        latent_sample = torch.randn(latent_size)
+        latent_sample = torch.randn(latent_size) / 3
         display_track()
 
     def display_track(colorbar: bool = False):
