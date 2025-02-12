@@ -69,7 +69,7 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return FmaExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
+        return FmaExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
 
     def __del__(self):
         self.free_resources()

@@ -63,7 +63,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return SinewaveExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
+        return SinewaveExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
     
     @scenario(name="Convolutional VAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size. 3 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 4 dimensions")
     def cvae_core4(self):

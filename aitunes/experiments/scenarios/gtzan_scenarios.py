@@ -70,7 +70,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return GtzanExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
+        return GtzanExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
     
     @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="First real attempt at learning from the GTZAN dataset after model structures have been fixed. Low quality is used for faster training. Latent space size is 16 and only 3 convolutionnal layers are used.")
     def cvae_core16(self):

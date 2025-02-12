@@ -1,3 +1,4 @@
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
 from aitunes.experiments import AutoencoderExperiment
 
@@ -7,9 +8,8 @@ import torch
 
 class SinewaveExperiment(AutoencoderExperiment):
 
-    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, flatten: bool = False):
+    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures):
         super().__init__("SineWave", model, weights_path, loss, optimizer)
-        self._flatten = flatten
         
         self.train_loader = training_data["spectrograms"]
         self.train_labels = training_data["labels"]
@@ -44,7 +44,7 @@ class SinewaveExperiment(AutoencoderExperiment):
             spectrograms = dataset[batch_indices]
             spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
 
-            if self._flatten:
+            if self.flatten:
                 spectrograms = spectrograms.flatten(start_dim=1, end_dim=2)
             else:
                 spectrograms = spectrograms.unsqueeze(1)

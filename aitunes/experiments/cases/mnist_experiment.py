@@ -1,4 +1,5 @@
 from aitunes.experiments import AutoencoderExperiment
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import normalize, device
 
 from matplotlib.widgets import Slider
@@ -14,18 +15,18 @@ import torchvision.transforms as transforms
 
 class MnistExperiment(AutoencoderExperiment):
 
-    def __init__(self, model, weights_path, loss, optimizer, flatten: bool):
+    def __init__(self, model, weights_path, loss, optimizer):
         super().__init__("MNIST Compression", model, weights_path, loss, optimizer)
         transform = transforms.ToTensor()  # This will convert images to PyTorch tensors scaled to [0, 1] range for grayscale
         train_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=True, download=True, transform=transform)
         test_dataset = torchvision.datasets.MNIST(root=path.join("assets", "Samples"), train=False, download=True, transform=transform)
 
-        self.flatten = flatten
         self.train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, generator=torch.Generator(device=device))
         self.test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True, generator=torch.Generator(device=device))
         self.embeds, self.labels = [], []
         # The following values are required for interactive evaluation and can either be set through the appropriate method
         # or automatically if a model evaluation is performed, through the prepare_embedded_region_mw middleware
+        # TODO : See if this is still useful now that KL divergence is fixed 
         self.i_xmin, self.i_xmax = float('inf'), -float('inf')  # Bounding values for the x axis
         self.i_ymin, self.i_ymax = float('inf'), -float('inf')  # Bounding values for the y axis
 

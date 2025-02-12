@@ -2,6 +2,7 @@ from os import path, listdir, makedirs
 from typing import Any, Callable, Union
 from abc import ABC, abstractmethod
 from datetime import datetime
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import get_loading_char
 from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 
@@ -32,7 +33,7 @@ class AutoencoderExperiment(ABC):
         self._model = model
         self._weights_path = weights_path
         self._support = AutoencoderExperimentSupport(name)
-
+        
         self._loss_criterion: nn.Module = loss_criterion
         self._optimizer: optim.Optimizer = optimizer
         self._middlewares = []  # Middlewares applied when evaluating the model (Probably for plotting visual information)
@@ -42,6 +43,10 @@ class AutoencoderExperiment(ABC):
     @property
     def model(self):
         return self._model
+    
+    @property
+    def flatten(self) -> bool:
+        return not isinstance(self.model, CVAE)
     
     def set_plotting(self, plotting: bool) -> 'AutoencoderExperiment':
         self._support.plotting = plotting

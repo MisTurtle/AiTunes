@@ -1,3 +1,4 @@
+from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
 from aitunes.experiments import AutoencoderExperiment
 
@@ -11,15 +12,10 @@ class GtzanExperiment(AutoencoderExperiment):
     The GTZAN dataset has 100 30-second samples for a wapping 10 different genres, resulting in 1000 * 30 = 30'000 seconds of music to train on
     For this purpose, 95 samples will be split and used for the training process in each genre, while the other 5 will be used for model evaluation
     """
-    # TODO : Remove flatten parameter (can be deduced from isinstance(model, CVAE) or later on with model.input_shape if more model types are added)
     # TODO : Compare this class with Sinewave experimetn and merge shared properties to reduce boilerplate 
-    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, flatten: bool = False):
-        """
-        :param reconstruct_audio: Reconstruct an AudioProcessingInterface from a normalized spectrogram
-        """
+    def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures):
         super().__init__("GTZAN", model, weights_path, loss, optimizer)
-        self._flatten = flatten
-
+        
         self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
         self.training_indices = np.arange(len(self.train_loader))
 
@@ -51,7 +47,7 @@ class GtzanExperiment(AutoencoderExperiment):
             spectrograms = dataset[batch_indices]
             spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
 
-            if self._flatten:
+            if self.flatten:
                 spectrograms = spectrograms.flatten(start_dim=1, end_dim=2)
             else:
                 spectrograms = spectrograms.unsqueeze(1)

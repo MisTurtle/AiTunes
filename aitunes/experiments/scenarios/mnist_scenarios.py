@@ -28,7 +28,7 @@ class MnistReconstructionScenarios(ScenarioContainer):
 
     def instantiate(self, s, model_path):
         model, loss, optimizer = s(self)
-        return MnistExperiment(model, model_path or s.model_path, loss, optimizer, flatten=not isinstance(model, CVAE))
+        return MnistExperiment(model, model_path or s.model_path, loss, optimizer)
     
     @scenario(name="Simple AE", version="1.0", description="Train to reconstruct images from compression to a 2D plane with a simple autoencoder")
     def ae(self):

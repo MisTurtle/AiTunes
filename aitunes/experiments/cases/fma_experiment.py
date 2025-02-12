@@ -15,7 +15,6 @@ class FmaExperiment(AutoencoderExperiment):
     def __init__(self, model, weights_path, loss, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures):
         super().__init__("FMA", model, weights_path, loss, optimizer)
 
-        self._flatten = isinstance(model, CVAE)  # TODO : Change that to a model property in case more model variations are added later on
         self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
         self.training_indices = np.arange(len(self.train_loader))
 
@@ -47,7 +46,7 @@ class FmaExperiment(AutoencoderExperiment):
             spectrograms = dataset[batch_indices]
             spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
 
-            if self._flatten:
+            if self.flatten:
                 spectrograms = spectrograms.flatten(start_dim=1, end_dim=2)
             else:
                 spectrograms = spectrograms.unsqueeze(1)
