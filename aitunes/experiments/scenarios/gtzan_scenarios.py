@@ -63,7 +63,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
             precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[0], path_to_eval_spectrograms[0], 0.05, self.high_mode, preprocess_audio, preprocess_spectrogram)
             self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[0], mode='r+'), h5py.File(path_to_eval_spectrograms[0], mode='r+')
         elif self.get_mode() == self.low_mode:
-            precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[1], path_to_eval_spectrograms[1], 0.5, self.low_mode, preprocess_audio, preprocess_spectrogram)
+            precompute_spectrograms_for_audio_folder(path_to_audios, path_to_training_spectrograms[1], path_to_eval_spectrograms[1], 0.05, self.low_mode, preprocess_audio, preprocess_spectrogram)
             self.training_file, self.evaluation_file = h5py.File(path_to_training_spectrograms[1], mode='r+'), h5py.File(path_to_eval_spectrograms[1], mode='r+')
 
     def instantiate(self, s, model_path):
@@ -72,7 +72,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         self.generate_datasets()
         return GtzanExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), flatten=not isinstance(model, CVAE))
     
-    @scenario(name="Convolutional VAE", version="1.0-LOW16", description="First real attempt at learning from the GTZAN dataset after model structures have been fixed. Low quality is used for faster training. Latent space size is 16 and only 3 convolutionnal layers are used.")
+    @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="First real attempt at learning from the GTZAN dataset after model structures have been fixed. Low quality is used for faster training. Latent space size is 16 and only 3 convolutionnal layers are used.")
     def cvae_core16(self):
         self.set_mode(self.low_mode)
         model = CVAE(
@@ -84,6 +84,47 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         )
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
+
+  
+    @scenario(name="GTZAN CVAE", version="1.1-LOW16", description="Since attempts with the 1.0-LOW16 are yielding decent results for the network size, this scenario increases the network size from 3 to 6 convolutional layers, keeping the latent space with a size of 16.")
+    def cvae_core16_6conv(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128, 256, 512, 1024],
+            conv_kernels=[      3,       3,    3,   3,   3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
+            latent_space_dim=16
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+    
+    @scenario(name="GTZAN CVAE", version="1.1-LOW32", description="Conv layers are increased from 3 to 6, and the latent space to 32.")
+    def cvae_core32_6conv(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[     32,      64,  128, 256, 512, 1024],
+            conv_kernels=[      3,       3,    3,   3,   3,    3],
+            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
+            latent_space_dim=32
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+        
+    @scenario(name="GTZAN CVAE", version="1.2-LOW32", description="")
+    def cvae_core32_6conv_2strides(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
+            latent_space_dim=32
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+
 
     def __del__(self):
         self.free_resources()
