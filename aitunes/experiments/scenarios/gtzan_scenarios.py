@@ -4,10 +4,10 @@ import torch.optim as optim
 
 from os import path
 
+from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.modules import CVAE
 from aitunes.audio_processing import PreprocessingCollection
 
-from aitunes.experiments.cases import GtzanExperiment
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
 
 from aitunes.utils import download_and_extract
@@ -70,49 +70,22 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return GtzanExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
-    
-    @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="First real attempt at learning from the GTZAN dataset after model structures have been fixed. Low quality is used for faster training. Latent space size is 16 and only 3 convolutionnal layers are used.")
-    def cvae_core16(self):
+        return SpectrogramBasedAutoencoderExperiment("GTZAN", model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), 16)
+      
+    @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="")
+    def cvae_core16_6conv_2strides(self):
         self.set_mode(self.low_mode)
         model = CVAE(
             input_shape=[1, *self.get_mode().spectrogram_size],
-            conv_filters=[     32,      64,  128],
-            conv_kernels=[      3,       3,    3],
-            conv_strides=[ (2, 1),  (2, 1),    2],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
             latent_space_dim=16
         )
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
 
-  
-    @scenario(name="GTZAN CVAE", version="1.1-LOW16", description="Since attempts with the 1.0-LOW16 are yielding decent results for the network size, this scenario increases the network size from 3 to 6 convolutional layers, keeping the latent space with a size of 16.")
-    def cvae_core16_6conv(self):
-        self.set_mode(self.low_mode)
-        model = CVAE(
-            input_shape=[1, *self.get_mode().spectrogram_size],
-            conv_filters=[     32,      64,  128, 256, 512, 1024],
-            conv_kernels=[      3,       3,    3,   3,   3,    3],
-            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
-            latent_space_dim=16
-        )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
-        return model, loss, optimizer
-    
-    @scenario(name="GTZAN CVAE", version="1.1-LOW32", description="Conv layers are increased from 3 to 6, and the latent space to 32.")
-    def cvae_core32_6conv(self):
-        self.set_mode(self.low_mode)
-        model = CVAE(
-            input_shape=[1, *self.get_mode().spectrogram_size],
-            conv_filters=[     32,      64,  128, 256, 512, 1024],
-            conv_kernels=[      3,       3,    3,   3,   3,    3],
-            conv_strides=[ (2, 1),  (2, 1),    2,   2,   2,    2],
-            latent_space_dim=32
-        )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
-        return model, loss, optimizer
-        
-    @scenario(name="GTZAN CVAE", version="1.2-LOW32", description="")
+    @scenario(name="GTZAN CVAE", version="1.0-LOW32", description="")
     def cvae_core32_6conv_2strides(self):
         self.set_mode(self.low_mode)
         model = CVAE(

@@ -2,6 +2,8 @@ from os import path, listdir, makedirs
 from typing import Any, Callable, Union
 from abc import ABC, abstractmethod
 from datetime import datetime
+
+import h5py
 from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import get_loading_char
 from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
@@ -13,6 +15,8 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
+from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
 
 
 # Function taking 5 parameters:
@@ -33,7 +37,7 @@ class AutoencoderExperiment(ABC):
         self._model = model
         self._weights_path = weights_path
         self._support = AutoencoderExperimentSupport(name)
-        
+
         self._loss_criterion: nn.Module = loss_criterion
         self._optimizer: optim.Optimizer = optimizer
         self._middlewares = []  # Middlewares applied when evaluating the model (Probably for plotting visual information)
@@ -332,3 +336,62 @@ class AutoencoderExperimentSupport:
     def log_training_loss(self, ended: bool = False) -> 'AutoencoderExperimentSupport':
         self.log_running_loss(f"Epoch {self.ran_epochs + 1}/{self.total_epochs}", ended, not ended)
         return self
+    
+
+class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
+
+    def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int):
+        super().__init__(name, model, weights_path, loss_criterion, optimizer)
+
+        self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
+        self.training_indices = np.arange(len(self.train_loader))
+
+        self.test_loader, self.test_labels = evaluation_data["spectrograms"], evaluation_data["labels"]
+        self.test_indices = np.arange(len(self.test_loader))
+
+        self.mode = mode
+        self.batch_size = batch_size
+
+    def next_batch(self, training: bool):
+        dataset = self.train_loader
+        indices = self.training_indices
+        if not training:
+            dataset = self.test_loader
+            indices = self.test_indices
+        
+        np.random.shuffle(indices)
+
+        complete = False
+        batch_size, current_index = self.batch_size, 0
+        while not complete:
+            if current_index + batch_size >= dataset.shape[0]:
+                batch_indices = np.concatenate((indices[current_index:], indices[:batch_size + current_index - dataset.shape[0]]))
+                complete = True
+            else:
+                batch_indices = indices[current_index:current_index + batch_size]
+
+            batch_indices = np.sort(batch_indices)
+            spectrograms = dataset[batch_indices]
+            spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
+
+            if self.flatten:
+                spectrograms = spectrograms.flatten(start_dim=1, end_dim=2)
+            else:
+                spectrograms = spectrograms.unsqueeze(1)
+
+            yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
+            current_index += batch_size
+
+    def interactive_evaluation(self):
+        self.model.eval()
+        with torch.no_grad():
+            print("Wait a moment while the first audio is being processed...")
+            audio_model_interactive_evaluation(
+                features=self.mode,
+                test_loader=self.test_loader,
+                test_labels=self.test_labels,
+                # test_loader=self.train_loader,
+                # test_labels=self.train_labels,
+                model=self.model,
+                loss_criterion=self._loss_criterion
+            )

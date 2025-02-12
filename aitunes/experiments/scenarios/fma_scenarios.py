@@ -1,16 +1,13 @@
 import h5py
 import numpy as np
-import torch.optim as optim
 
 from os import path
 
-from aitunes.modules import CVAE
-from aitunes.experiments.cases import FmaExperiment
+from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.audio_processing import PreprocessingCollection
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer
 
 from aitunes.utils import download_and_extract
-from aitunes.utils.loss_functions import simple_mse_kl_loss
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
 
 
@@ -69,7 +66,7 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return FmaExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
+        return SpectrogramBasedAutoencoderExperiment("FMA", model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), 16)
 
     def __del__(self):
         self.free_resources()

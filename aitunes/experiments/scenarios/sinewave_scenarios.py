@@ -4,10 +4,10 @@ import torch.optim as optim
 
 from os import path
 
+from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.modules import CVAE
 from aitunes.audio_generation.simple_audio_streams import generate_dataset_of_simple_instruments
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
-from aitunes.experiments.cases import SinewaveExperiment
 from aitunes.audio_processing import PreprocessingCollection
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
 from aitunes.utils.loss_functions import simple_mse_kl_loss
@@ -63,7 +63,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         self.set_mode(None)
         model, loss, optimizer = s(self)
         self.generate_datasets()
-        return SinewaveExperiment(model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode())
+        return SpectrogramBasedAutoencoderExperiment("SINEWAVE", model, model_path or s.model_path, loss, optimizer, self.training_file, self.evaluation_file, self.get_mode(), 16)
     
     @scenario(name="Convolutional VAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size. 3 convolutional layers with asymmetrical strides at the beginning are used.\nLatent Space Size : 4 dimensions")
     def cvae_core4(self):
