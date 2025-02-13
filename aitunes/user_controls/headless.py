@@ -190,7 +190,8 @@ class HeadlessActionPipeline:
         if self.get_selected_scenario() is not None:
             lines += [f"actions.select_scenario('{self.get_selected_scenario().identifier}')"]
         if self.get_selected_model() is not None:
-            lines += [f"actions.select_model('{self.get_selected_model().replace('\\', '\\\\')}')"]
+            models = self.get_selected_model().replace('\\', '\\\\')
+            lines += [f"actions.select_model('{models}')"]
         if self.get_selected_scenario() is not None and epochs > 0:
             lines += [f"actions.train({epochs}, {save_every}, {plotting})"]
         return imports + "\n" * 2 + "\n".join(lines)

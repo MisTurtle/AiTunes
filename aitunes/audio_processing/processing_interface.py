@@ -6,7 +6,6 @@ import librosa
 import soundfile as sf
 import numpy as np
 import matplotlib.pyplot as plt
-import sounddevice as sd
 
 
 class AudioProcessingInterface:
@@ -259,6 +258,7 @@ class AudioProcessingInterface:
     # Play the audio
     
     def play(self, speed: float = 1.0, blocking: bool = False):
+        import sounddevice as sd
         sd.play(self._y, self._sr * speed)
         if blocking:
             sd.wait()

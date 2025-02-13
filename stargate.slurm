@@ -6,9 +6,9 @@
 #SBATCH --output=AiTunes_J%A_t%a.out
 #SBATCH --error=AiTunes_J%A_t%a.err
 #SBATCH --mail-type=end,fail
-#SBATCH --mail-user=byron.cholet@univ-angers.fr
+#SBATCH --mail-user=byron.cholet@etud.univ-angers.fr
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=00:20:00
+#SBATCH --time=00:05:00
 #SBATCH --partition=intel-E5-2695
 #SBATCH --mem-per-cpu=1G
 

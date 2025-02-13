@@ -73,7 +73,7 @@ class AutoencoderExperiment(ABC):
 
     def _load_weights(self):
         if path.exists(self._weights_path):
-            checkpoint = torch.load(self._weights_path, weights_only=True)
+            checkpoint = torch.load(self._weights_path, weights_only=True, map_location=utils.device)
             self._model.load_state_dict(checkpoint["model"])
             self._optimizer.load_state_dict(checkpoint["optimizer"])
 

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import aitunes.utils as utils
 from torchsummary import summary
 
 
@@ -43,7 +44,7 @@ class SimpleAutoEncoder(nn.Module):
         self._encoder = SimpleEncoder(encoder_dimensions)
         self._decoder = SimpleDecoder(encoder_dimensions[::-1])
         if show_summary:
-            summary(self, (encoder_dimensions[0], ))
+            summary(self, (encoder_dimensions[0], ), device=utils.device.type)
     
     def forward(self, x):
         embedding = self._encoder(x)
@@ -76,7 +77,7 @@ class VariationalAutoEncoder(nn.Module):
         self._decoder = SimpleDecoder(encoder_dimensions[::-1])
         
         if show_summary:
-            summary(self, (encoder_dimensions[0], ))
+            summary(self, (encoder_dimensions[0], ), device=utils.device.type)
 
     def reparameterize(self, mu, log_var):
         epsilon = torch.randn_like(mu)
@@ -108,7 +109,7 @@ class CVAE(nn.Module):
         self._decoder = self._create_decoder()
 
         if show_summary:
-            summary(self, (*input_shape, ))
+            summary(self, (*input_shape, ), device=utils.device.type)
 
 
     def _create_encoder(self):
