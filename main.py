@@ -20,11 +20,14 @@ if __name__ == "__main__":
 
     if args.headless:
         if not actions.select_experiment(args.experiment):
-            parser.error(f"Experiment {args.experiment} does not exist. Choices are: \n - {'\n - '.join(actions.list_scripted_experiments())}")
+            choices = "\n - ".join(actions.list_scripted_experiments())
+            parser.error(f"Experiment {args.experiment} does not exist. Choices are: \n - {choices}")
         if not actions.select_scenario(args.scenario):
-            parser.error(f"Scenario {args.scenario} does not exist. Choices are: \n - {'\n - '.join(map(lambda x: x.identifier, actions.list_scenarios()))}")
+            choices = "\n - ".join(map(lambda x: x.identifier, actions.list_scenarios()))
+            parser.error(f"Scenario {args.scenario} does not exist. Choices are: \n - {choices}")
         if args.model is not None and args.model.lower() != "none" and not actions.select_model(args.model):
-            parser.error(f"Model {args.model} was not found. Choices are: \n - {'\n - '.join(actions.list_models())}")
+            choices = "\n - ".join(actions.list_models())
+            parser.error(f"Model {args.model} was not found. Choices are: \n - {choices}")
         if args.epochs < 0:
             parser.error(f"Epoch number should be higher than 0, but {args.epochs} was provided.")
         if args.save_every < 0:

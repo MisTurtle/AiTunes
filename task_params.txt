@@ -1,0 +1,1 @@
+--headless -Q -E VectorAugmentation -S simple_ae_v1.0 -M assets/Models/linear_augmentation/simple_ae_v1.0.pth -e 200 -s 50

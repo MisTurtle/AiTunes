@@ -111,6 +111,31 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
 
+    @scenario(name="GTZAN CVAE", version="1.0-HIGH32", description="")
+    def cvae_core64_high(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
+            latent_space_dim=32
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+
+    @scenario(name="GTZAN CVAE", version="1.0-HIGH64", description="")
+    def cvae_core64_high(self):
+        self.set_mode(self.low_mode)
+        model = CVAE(
+            input_shape=[1, *self.get_mode().spectrogram_size],
+            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_kernels=[  3,  3,   3,   3,   3,    3],
+            conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
+            latent_space_dim=64
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
 
     def __del__(self):
         self.free_resources()

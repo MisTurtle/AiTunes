@@ -37,7 +37,7 @@ def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, h
     sine_wave = sum(sine_waves)
     sine_wave_pcm = np.int16(sine_wave * 32767)  # Normalize to int16 which is the pcm data size (no compression)
 
-    file_path = os.path.join(to, f"sine_wave_{"_".join(map(lambda x: str(x), hz))}.wav")
+    file_path = os.path.join(to, f"sine_wave_{'_'.join(map(lambda x: str(x), hz))}.wav")
         
     write(file_path, sample_rate, sine_wave_pcm)
     return file_path
