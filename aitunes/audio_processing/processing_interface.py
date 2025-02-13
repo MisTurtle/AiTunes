@@ -42,7 +42,7 @@ class AudioProcessingInterface:
 
         match mode:
             case "file":
-                self._y, self._sr = librosa.load(filepath, sr=self._sr)
+                self._y, self._sr = librosa.load(filepath, sr=self._sr, mono=True)
             case "wave":
                 pass
             case "log_spec":

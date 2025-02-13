@@ -1,8 +1,10 @@
+**/.vscode
 **/.venv
 **/__pycache__
+
 assets/Samples/
 assets/Resources/
 assets/Models/gtzan/
 assets/Models/sinewave/
 history/
-.vscode/
+tests/output/

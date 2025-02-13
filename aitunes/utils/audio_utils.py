@@ -93,7 +93,7 @@ def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatu
     spectrograms, labels = [], []
 
     try:
-        i = AudioProcessingInterface.create_for(audio_path, mode='file', sample_rate=features.sample_rate)
+        i = AudioProcessingInterface.create_for(audio_path, mode='file', sr=features.sample_rate)
         samples_n = int(i.duration // features.duration)
 
         # Cut out the audio in small samples of appropriate duration
@@ -101,7 +101,7 @@ def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatu
             # Extract the window
             window = i.extract_window(features.duration, method="bounded", start=n * features.duration)
             window.preprocess(audio_preprocessing)
-            
+
             # Compute its mel spectrogram
             spect = window.log_mel_spectrogram(n_mels=features.n_mels, n_fft=features.n_fft, hop_length=features.hop_length)
             spect = spec_preprocessing(spect)

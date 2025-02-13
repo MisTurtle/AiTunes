@@ -15,7 +15,7 @@ def extract_mel_spectrogram(path, sr=None, nb_mels=None):
 
 if __name__ == "__main__":
     # Inspired from https://librosa.org/doc/latest/generated/librosa.feature.mfcc.html#librosa.feature.mfcc
-    samples_folder = path.join("assets", "Samples", "generated")
+    samples_folder = path.join("tests", "test_samples")
     for filename in listdir(samples_folder):
         p = path.join(samples_folder, filename)
         fig, ax = plt.subplots(nrows=2, sharex=True)
@@ -33,5 +33,5 @@ if __name__ == "__main__":
         fig.colorbar(mfcc_img, ax=[ax[1]])
         ax[1].set(title=f'{filename} - MFCC')
 
-        fig.show()
-        fig.waitforbuttonpress()
+        plt.show()
+        plt.close('all')

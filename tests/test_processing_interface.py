@@ -1,12 +1,13 @@
 import autoloader
-from os import path, listdir
+from os import makedirs, path, listdir
 from aitunes.audio_processing import AudioProcessingInterface
 import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
-    samples_folder = path.join("assets", "Samples", "generated")
-    output_folder = path.join("assets", "Samples", "processed")
+    samples_folder = path.join("tests", "test_samples")
+    output_folder = path.join("tests", "output", "processing_interface")
+    makedirs(output_folder, exist_ok=True)
     
     n_mels = 128
     mfcc_features = 64
