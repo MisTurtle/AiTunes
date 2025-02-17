@@ -35,7 +35,7 @@ class HeadlessActionPipeline:
         if exp is None:
             return "No experiment selected."
         
-        description = f"Experiment: {exp.get_identifier()}\n\t{exp.get_description()}"
+        description = f"Experiment: {exp.identifier}\n\t{exp.description}"
         scenario = self.get_selected_scenario()
         if scenario is None:
             return description
@@ -87,7 +87,7 @@ class HeadlessActionPipeline:
     #
     def list_scenarios(self) -> Iterable[ScenarioDescriptor]:
         self._require_experiment()
-        return list(self._selected_experiment.get_scenarios().values())
+        return list(self._selected_experiment.scenarios.values())
 
     def select_scenario(self, identifier: str) -> bool:
         self._require_experiment()
@@ -96,7 +96,7 @@ class HeadlessActionPipeline:
             # If a ScenarioDescriptor function is passed as a parameter, replace it with its identifier
             identifier = getattr(identifier, "identifier")
 
-        s = self._selected_experiment.get_scenarios().get(identifier, None)
+        s = self._selected_experiment._scenarios.get(identifier, None)
         if s is None:
             return False
         self._selected_scenario = s
@@ -185,7 +185,7 @@ class HeadlessActionPipeline:
         imports = f"from {c.__module__} import {c.__name__}"
         lines = [
             f"actions = {c.__name__}()",
-            f"actions.select_experiment('{self.get_selected_experiment().get_identifier()}')"
+            f"actions.select_experiment('{self.get_selected_experiment().identifier}')"
         ]
         if self.get_selected_scenario() is not None:
             lines += [f"actions.select_scenario('{self.get_selected_scenario().identifier}')"]

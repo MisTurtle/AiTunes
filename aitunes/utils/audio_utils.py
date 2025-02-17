@@ -62,10 +62,10 @@ def precompute_spectrograms_for_audio_folder(
     audio_preprocessing: Callable[[np.ndarray], np.ndarray],
     spec_preprocessing: Callable[[np.ndarray], np.ndarray]
 ):
-    assert path.exists(audio_folder)
     if path.exists(training_output) and path.exists(evaluation_output):
         print(f"Precomputed spectrograms found at {training_output} and {evaluation_output}.")
         return
+    assert path.exists(audio_folder)
     
     print(f"Precomputing spectrograms to {training_output} and {evaluation_output}")
     all_spectrograms, all_labels = [], []

@@ -247,7 +247,7 @@ class MainView(ctk.CTkFrame):
         
         # Experiment is not None
         self.code_copy_btn.configure(state="normal")
-        self.exp_pick_cb.set(self.actions.get_selected_experiment().get_identifier())
+        self.exp_pick_cb.set(self.actions.get_selected_experiment().identifier)
         available_scenarios = list(map(lambda x: x.identifier, self.actions.list_scenarios()))
         self.exp_pick_scenario_cb.configure(state="readonly", values=available_scenarios)
         if self.actions.get_selected_scenario() is None:

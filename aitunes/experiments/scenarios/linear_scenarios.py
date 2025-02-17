@@ -10,23 +10,23 @@ from aitunes.experiments.scenarios._scenario_utils import ScenarioDescriptor, Sc
 
 
 class LinearAugmentationScenarios(ScenarioContainer):
-    
-    @staticmethod
-    def get_path_to_history_root():
+   
+    @property
+    def identifier(self):
+        return "VectorAugmentation"
+
+    @property
+    def description(self):
+        return "Vectors in five dimensions are created from three values, implying a dependency amongst those dimensions. This experiment aims to quickly try out simple architectures before moving on to more demanding tasks."
+   
+    @property
+    def path_to_history_root(self):
         return path.join("history", "linear_augmentation")
 
-    @staticmethod
-    def get_path_to_release_root():
+    @property
+    def path_to_release_root(self):
         return path.join("assets", "Models", "linear_augmentation")
-    
-    @staticmethod
-    def get_identifier():
-        return "VectorAugmentation"
-    
-    @staticmethod
-    def get_description():
-        return "Vectors in five dimensions are created from three values, implying a dependency amongst those dimensions. This experiment aims to quickly try out simple architectures before moving on to more demanding tasks."
-    
+ 
     def instantiate(self, s: ScenarioDescriptor, model_path: Union[str, None]):
         model, loss, optimizer = s(self)
         return LinearExperiment(model, model_path or s.model_path, loss, optimizer)

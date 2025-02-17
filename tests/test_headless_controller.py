@@ -26,7 +26,7 @@ class TestHeadlessController(unittest.TestCase):
     def test_select_scenario(self):
         self.assertRaises(RuntimeError, lambda: self.controller.select_scenario("sc1"))
         self.controller.select_experiment("exp1")
-        self.controller._selected_experiment.get_scenarios.return_value = {"sc1": MagicMock(spec=ScenarioDescriptor)}
+        self.controller._selected_experiment._scenarios = {"sc1": MagicMock(spec=ScenarioDescriptor)}
         self.assertFalse(self.controller.select_scenario("sc2"))
         self.assertTrue(self.controller.select_scenario("sc1"))
         self.assertIsNotNone(self.controller.get_selected_scenario(), self.controller.get_selected_scenario())

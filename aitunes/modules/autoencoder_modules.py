@@ -149,8 +149,7 @@ class CVAE(nn.Module):
         # print("Target output size:", h_out_target, w_out_target)
 
         return padding, (p_h, p_w)
-            
-    
+
     def _create_decoder(self):
         layers = [nn.Linear(self.latent_space_dim, self._shape_before_bottleneck[0])]
         
