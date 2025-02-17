@@ -15,7 +15,7 @@ from matplotlib.widgets import Button
 
 from aitunes.audio_processing import PreprocessingCollection, AudioProcessingInterface
 from aitunes.modules.autoencoder_modules import CVAE
-from aitunes.utils import get_loading_char, save_dataset
+from aitunes.utils import get_loading_char, append_to_dataset
 
 
 class AudioFeatures(namedtuple("AudioFeatures", field_names=["n_mels", "n_mfcc", "n_fft", "hop_length", "sample_rate", "duration", "spec_bounds", "dB_bounds"])):
@@ -60,7 +60,8 @@ def precompute_spectrograms_for_audio_folder(
     training_output: str, evaluation_output: str, evaluation_proportions: float,
     features: AudioFeatures,
     audio_preprocessing: Callable[[np.ndarray], np.ndarray],
-    spec_preprocessing: Callable[[np.ndarray], np.ndarray]
+    spec_preprocessing: Callable[[np.ndarray], np.ndarray],
+    flush_every: int = 100  # How often to save spectrograms to the dataset file (reduce ram usage ._. we don't want 41 Gigs required lmao)
 ):
     if path.exists(training_output) and path.exists(evaluation_output):
         print(f"Precomputed spectrograms found at {training_output} and {evaluation_output}.")
@@ -69,6 +70,27 @@ def precompute_spectrograms_for_audio_folder(
     
     print(f"Precomputing spectrograms to {training_output} and {evaluation_output}")
     all_spectrograms, all_labels = [], []
+    all_count, eval_count = 0, 0
+
+    def flush():
+        nonlocal all_count, eval_count
+        # Have at least one spectrogram used as evaluation data per batch
+        evaluation_data_size = max(1, int(len(all_spectrograms) * evaluation_proportions))
+        evaluation_indices = np.random.choice(len(all_spectrograms), evaluation_data_size, replace=False)
+        all_count += len(all_spectrograms)
+        eval_count += evaluation_data_size
+        # Split datasets
+        training_data = np.delete(all_spectrograms, evaluation_indices, axis=0).astype(np.float32)
+        training_labels = np.delete(all_labels, evaluation_indices, axis=0).astype("S")
+        eval_data = np.take(all_spectrograms, evaluation_indices, axis=0).astype(np.float32)
+        eval_labels = np.take(all_labels, evaluation_indices, axis=0).astype("S")
+        # Append to file
+        append_to_dataset(training_output, { "spectrograms": training_data, "labels": training_labels })
+        append_to_dataset(evaluation_output, { "spectrograms": eval_data, "labels": eval_labels })
+        # Clear lists
+        all_spectrograms.clear()
+        all_labels.clear()
+
     for root, _, files in walk(audio_folder):
         for filename in files:  # Loop over audio files in the dataset
             if not utils.quiet:
@@ -77,17 +99,11 @@ def precompute_spectrograms_for_audio_folder(
             all_spectrograms += spectrograms
             all_labels += labels
 
-    print(f"\r{len(all_spectrograms)} spectrograms precomputed. Now saving as HDF5 datasets...")
-
-    # Shuffle the spectrograms by keeping their associated label
-    all_data = list(zip(all_spectrograms, all_labels))
-    random.shuffle(all_data)
-    all_spectrograms, all_labels = zip(*all_data)
-
-    # Save training and evaluation datasets
-    evaluation_data_size = int(len(all_spectrograms) * evaluation_proportions)
-    save_dataset(training_output,   { "spectrograms": np.array(all_spectrograms[evaluation_data_size:]), "labels": np.array(all_labels[evaluation_data_size:], dtype="S") })
-    save_dataset(evaluation_output, { "spectrograms": np.array(all_spectrograms[:evaluation_data_size]), "labels": np.array(all_labels[:evaluation_data_size], dtype="S") })
+            # Save and clear memory every x samples
+            if len(all_spectrograms) >= flush_every:
+                flush()
+    flush()     
+    print(f"\r{all_count} spectrograms precomputed (including {eval_count} for tests) and saved as HDF5 datasets...")
 
 def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatures, audio_preprocessing: Callable[[np.ndarray], np.ndarray], spec_preprocessing: Callable[[np.ndarray], np.ndarray]):
     spectrograms, labels = [], []

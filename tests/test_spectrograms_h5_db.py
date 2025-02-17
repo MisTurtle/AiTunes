@@ -23,7 +23,8 @@ class TestSpectrogramsAsH5(unittest.TestCase):
             evaluation_proportions=0.05,
             features=quality,
             audio_preprocessing=lambda y: y,
-            spec_preprocessing=lambda y: y
+            spec_preprocessing=lambda y: y,
+            flush_every=5
         )
 
 if __name__ == "__main__":

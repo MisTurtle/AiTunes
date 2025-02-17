@@ -107,7 +107,6 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
         if clean:
             remove(zip_path)
 
-
 def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
     makedirs(path.dirname(path_to), exist_ok=True)
     with h5py.File(path_to, "w") as f:
@@ -115,3 +114,15 @@ def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
             f.create_dataset(name, data=values)
         for key, val in attrs.items():
             f.attrs[key] = val
+
+def append_to_dataset(path_to: str, datasets: dict):
+    makedirs(path.dirname(path_to), exist_ok=True)
+    with h5py.File(path_to, 'a') as f:
+        for key, value in datasets.items():
+            if key in f:
+                f[key].resize((f[key].shape[0] + value.shape[0]), axis=0)
+                f[key][-value.shape[0]:] = value
+            else:
+                maxshape = (None,) + value.shape[1:]
+                f.create_dataset(key, data=value, maxshape=maxshape, chunks=True)
+
