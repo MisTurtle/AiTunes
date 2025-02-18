@@ -397,10 +397,10 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
             print("Wait a moment while the first audio is being processed...")
             audio_model_interactive_evaluation(
                 features=self.mode,
-                # test_loader=self.test_loader,
-                # test_labels=self.test_labels,
-                test_loader=self.train_loader,
-                test_labels=self.train_labels,
+                test_loader=self.test_loader,
+                test_labels=self.test_labels,
+                # test_loader=self.train_loader,
+                # test_labels=self.train_labels,
                 model=self.model,
                 loss_criterion=self._loss_criterion
             )

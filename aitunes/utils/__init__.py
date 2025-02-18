@@ -91,7 +91,7 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
                         print(f"\r{get_loading_char()} {dl_size:.2f} MB{dl_suffix(dl_size)}", end='')
 
         print(f"\rDownload complete. Extracting to {target_path}")
-        makedirs(target_path)
+        makedirs(target_path, exist_ok=True)
 
         with zipfile.ZipFile(zip_path, 'r') as zipf:
             zipf.extractall(target_path)
