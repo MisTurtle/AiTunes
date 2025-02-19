@@ -66,3 +66,15 @@ class MnistReconstructionScenarios(ScenarioContainer):
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
     
+    @scenario(name="Simple CVAE", version="1.0-REC", description="Use convolutions to extract meaningful features through relations between clusters of pixels. Also serves as a test to verify the CVAE implementation work as expected. Uses 3 convolutional layers as well as balanced weights due to better results being yielded by this setting for the Simple VAE model. Beta = 0.1")
+    def cvae_rec(self):
+        model = CVAE(
+            input_shape =[ 1, 28,  28],
+            conv_filters=[32, 64, 128],
+            conv_kernels=[ 3,  3,   3],
+            conv_strides=[ 2,  2,   2],
+            latent_space_dim=2
+        )
+        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=0.1), optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer
+    
