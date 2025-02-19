@@ -16,7 +16,7 @@ parser.add_argument("--quiet", "-Q", action="store_true", help="Disable training
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    utils.quiet = args.quiet
+    actions.quiet(args.quiet)
 
     if args.headless:
         if not actions.select_experiment(args.experiment):

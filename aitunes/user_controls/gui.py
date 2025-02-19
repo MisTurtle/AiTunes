@@ -22,6 +22,7 @@ class GUI(ctk.CTk):
         if _pipeline is None:
             _pipeline = HeadlessActionPipeline()
         self.actions = _pipeline
+        self.actions.quiet()
 
         self.view = None
         self.set_view(MainView(self, self.actions), first=True)
@@ -53,17 +54,8 @@ class MainView(ctk.CTkFrame):
         self.gui = gui
         self.actions = actions
         self._refresh()
-
-    def _get_shared_dict(self) -> dict:
-        return {
-            "epochs": self.set_epochs_slider.get(),
-            "save_every": self.set_save_period_slider.get(),
-            "release_only": self.exp_pick_model_release_cb.get() == 1
-        }
     
     def _run_closed(self, fn):
-        # global _shared_state
-        # _shared_state = self._get_shared_dict()
         GUIUtils.run_closed(fn, self._read_state_to_widgets)
 
     def _refresh(self):
@@ -163,6 +155,10 @@ class MainView(ctk.CTkFrame):
         self.set_plotting_cb = ctk.CTkCheckBox(self.set_frame, text="Plot Epoch Loss", font=("Helvetica", 12), command=self._update_code_displaybox)
         self.set_plotting_cb.deselect()
         self.set_plotting_cb.pack(side=ctk.TOP, anchor="w", pady=10, padx=10)
+
+        self.set_quiet_cb = ctk.CTkCheckBox(self.set_frame, text="Quiet Mode", font=("Helvetica", 12), command=lambda: self.actions.quiet(self.set_quiet_cb.get() == 1))
+        self.set_quiet_cb.select()
+        self.set_quiet_cb.pack(side=ctk.TOP, anchor="w", pady=10, padx=10)
 
         self.tooltip_text = ctk.CTkLabel(self.set_frame, text_color="#e63939", text="*No number of epochs selected")
     

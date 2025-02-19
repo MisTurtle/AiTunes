@@ -2,6 +2,7 @@ import os
 from typing import Any, Iterable, Union
 
 # AiTunes imports
+import aitunes.utils as utils
 from aitunes.experiments import scenarios
 from aitunes.experiments.autoencoder_experiment import AutoencoderExperiment
 from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer, ScenarioDescriptor
@@ -53,6 +54,10 @@ class HeadlessActionPipeline:
                 description += "None selected. Training will start from scratch."
 
         return description
+    
+    def quiet(self, quiet: bool = True) -> 'HeadlessActionPipeline':
+        utils.quiet = quiet;
+        return self
 
     #
     # vvv LIST AND SELECT EXPERIMENTS vvv
