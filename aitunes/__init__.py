@@ -4,6 +4,17 @@ import torch
 if torch.cuda.is_available():
     torch.set_default_device('cuda')
 
+import sys
+import signal
+def handle_signal(signum, frame):
+    print("Imminent termination signal received, exiting early to save progress...")
+    quit(0)
+
+if sys.platform == "linux":
+    signal.signal(signal.SIGUSR1, handle_signal)
+else:
+    signal.signal(signal.SIGINT, handle_signal)
+
 from .audio_generation import *
 from .audio_processing import *
 from .modules import *
