@@ -3,7 +3,6 @@ import torch.optim as optim
 from os import path
 
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
-
 from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
 from aitunes.utils.loss_functions import simple_mse_kl_loss

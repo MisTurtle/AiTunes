@@ -1,15 +1,11 @@
-import h5py
-import numpy as np
 import torch.optim as optim
 
 from os import path
 
-from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.modules import CVAE
 from aitunes.audio_generation.simple_audio_streams import generate_dataset_of_simple_instruments
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
-from aitunes.audio_processing import PreprocessingCollection
-from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures, precompute_spectrograms_for_audio_folder
+from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
 from aitunes.utils.loss_functions import simple_mse_kl_loss
 
 
@@ -25,7 +21,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
 
     @property
     def identifier(self):
-        return "Sinewave"
+        return "SINEWAVE"
 
     @property
     def description(self):

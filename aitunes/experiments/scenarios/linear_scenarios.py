@@ -13,7 +13,7 @@ class LinearAugmentationScenarios(ScenarioContainer):
    
     @property
     def identifier(self):
-        return "VectorAugmentation"
+        return "5D VECTORS"
 
     @property
     def description(self):

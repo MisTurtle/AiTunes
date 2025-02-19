@@ -1,5 +1,4 @@
 from aitunes.experiments import AutoencoderExperiment
-from aitunes.modules.autoencoder_modules import CVAE
 from aitunes.utils import normalize, device
 
 from matplotlib.widgets import Slider
