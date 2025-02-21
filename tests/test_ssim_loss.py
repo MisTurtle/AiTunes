@@ -1,12 +1,17 @@
+import torch
+import numpy as np
+
 from os import path, listdir
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Button, Slider
-import numpy as np
 from skimage.io import imread
 from skimage.filters import gaussian
 from skimage.util import random_noise
 from skimage.metrics import structural_similarity as ssim
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
+
+torch_ssim = StructuralSimilarityIndexMeasure(data_range=1.0, kernel_size=7, reduction="sum")
 
 def start():
     image_folder = path.join("tests", "test_samples", "image")
@@ -26,7 +31,12 @@ def start():
             processed = random_noise(processed, mode='s&p', rng=0, clip=True, amount=slider_noise.val)
 
         axes[1].imshow(processed)
-        fig.suptitle(suptitle % ssim(image, processed, data_range=1.0, win_size=5, channel_axis=-1))
+        torch_image = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+        torch_processed = torch.tensor(processed, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+        fig.suptitle(suptitle % (
+            ssim(image, processed, data_range=1.0, win_size=11, channel_axis=-1),
+            torch_ssim(torch_image, torch_processed)
+        ))
         plt.show()
     
     def next_image(_=None):
@@ -41,7 +51,7 @@ def start():
     axes[0].axis('off')
     axes[1].set_title("Modified Image")
     axes[1].axis('off')
-    suptitle = "Structural Similarity: %.3f"
+    suptitle = "SSIM Tests\nScikit: %.3f  |  Torch: %.3f"
 
     ax_blur = plt.axes([0.1, 0.02, 0.65, 0.03])
     ax_noise = plt.axes([0.1, 0.06, 0.65, 0.03])
