@@ -74,7 +74,7 @@ def preprocess_all_files_in_folder(dossier, output_folder):
             preprocess_audio(chemin_fichier, output_folder)  # Traitement du fichier audio
 
 def main():
-    dossier_audio = "tests/test_samples"  # Dossier contenant les fichiers audio
+    dossier_audio = "tests/test_samples/audio"  # Dossier contenant les fichiers audio
     output_folder = "tests/output/processed_spectrograms"  # Dossier pour sauvegarder les spectrogrammes
 
     print("Démarrage du prétraitement des fichiers audio...")

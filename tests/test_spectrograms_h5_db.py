@@ -9,7 +9,7 @@ from aitunes.utils.audio_utils import precompute_spectrograms_for_audio_folder, 
 class TestSpectrogramsAsH5(unittest.TestCase):
 
     def setUp(self):
-        self.input_dir = path.join("tests", "test_samples")
+        self.input_dir = path.join("tests", "audio", "test_samples")
         self.output_dir = path.join("tests", "output", "spectrogram_databases")
         shutil.rmtree(self.output_dir)
         makedirs(self.output_dir, exist_ok=True)

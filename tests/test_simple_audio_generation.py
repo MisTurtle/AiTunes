@@ -3,7 +3,7 @@ from os import path
 from aitunes.audio_generation import *
 
 if __name__ == "__main__":
-    output_folder = path.join("tests", "test_samples")
+    output_folder = path.join("tests", "audio", "test_samples")
     os.makedirs(output_folder, exist_ok=True)
 
     generate_sine_wave(to=output_folder)

@@ -15,7 +15,7 @@ def extract_mel_spectrogram(path, sr=None, nb_mels=None):
 
 if __name__ == "__main__":
     # Inspired from https://librosa.org/doc/latest/generated/librosa.feature.mfcc.html#librosa.feature.mfcc
-    samples_folder = path.join("tests", "test_samples")
+    samples_folder = path.join("tests", "test_samples", "audio")
     for filename in listdir(samples_folder):
         p = path.join(samples_folder, filename)
         fig, ax = plt.subplots(nrows=2, sharex=True)

@@ -64,7 +64,7 @@ class TestPreprocessingCollection(unittest.TestCase):
         self.assertEqual(array.max(), original_max)
 
     def apply_filters(self):
-        file_path = path.join("tests", "test_samples", "sine_asc_wave_150-300.wav")
+        file_path = path.join("tests", "test_samples", "audio", "sine_asc_wave_150-300.wav")
         
         sample_rate = 5000  
         cutoff_freq = 200 

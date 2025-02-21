@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
-    samples_folder = path.join("tests", "test_samples")
+    samples_folder = path.join("tests", "audio", "test_samples")
     output_folder = path.join("tests", "output", "processing_interface")
     makedirs(output_folder, exist_ok=True)
     
