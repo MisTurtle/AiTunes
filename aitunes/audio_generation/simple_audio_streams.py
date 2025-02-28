@@ -87,11 +87,13 @@ def generate_dataset_of_simple_instruments(to: str, sample_rate: int = 22050, un
     for file in os.listdir(to):  # Clear any previous dataset
         os.remove(path.join(to, file))
     
-    hz_range = 10, 1500
+    hz_range = 10, 4000
     r = lambda: random.randint(*hz_range)
     for _ in range(unit_per_type):
         generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=r())
     for _ in range(unit_per_type):
         generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=[r(), r()])
+    for _ in range(unit_per_type):
+        generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=[r(), r(), r()])
     for _ in range(unit_per_type):
         generate_ascending_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz_min=r(), hz_max=r())

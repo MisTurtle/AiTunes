@@ -1,9 +1,9 @@
 from os import path
 import torch.optim as optim
 
-from aitunes.modules import CVAE
+from aitunes.modules import CVAE, ResNet2D
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
-from aitunes.utils.loss_functions import simple_mse_kl_loss
+from aitunes.utils.loss_functions import *
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
 
 
@@ -43,47 +43,32 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
 
     @property
     def all_modes(self):
-        return HighResolutionAudioFeatures(5.0), LowResolutionAudioFeatures(5.0)
+        return HighResolutionAudioFeatures(2.0), LowResolutionAudioFeatures(2.0)
 
     @property
     def dataset_info(self):
         return "https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification", 1241.20, "Data"
       
-    @scenario(name="GTZAN CVAE", version="1.0-LOW16", description="Scenarios in this series aim to find a decent latent space size for low quality audio data more diverse than simple sinewave compounds. 6 convolutional layers with symmetrical stride are used.\nLatent Space Size : 16 dimensions")
-    def cvae_core16(self):
+    @scenario(name="ResNet2D", version="low-dim32", description="Application of the residual network architecture on complexe, low-quality audio data. Latent Dim: 32")
+    def resnet_low32(self):
         self.mode = 1
-        model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[ 32, 64, 128, 256, 512, 1024],
-            conv_kernels=[  3,  3,   3,   3,   3,    3],
-            conv_strides=[  2,  2,   2,   2,   2,    2],
-            latent_space_dim=16
+        print(self.mode.spectrogram_size)
+        model = ResNet2D((1, *self.mode.spectrogram_size), 4, 32, 32)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0000625)
         )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
-        return model, loss, optimizer
-
-    @scenario(name="GTZAN CVAE", version="1.0-LOW32", description="Scenarios in this series aim to find a decent latent space size for low quality audio data more diverse than simple sinewave compounds. 6 convolutional layers with symmetrical stride are used.\nLatent Space Size : 32 dimensions")
-    def cvae_core32(self):
-        self.mode = 1
-        model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[ 32, 64, 128, 256, 512, 1024],
-            conv_kernels=[  3,  3,   3,   3,   3,    3],
-            conv_strides=[  2,  2,   2,   2,   2,    2],
-            latent_space_dim=32
-        )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
     
-    @scenario(name="GTZAN CVAE", version="1.0-LOW64", description="Scenarios in this series aim to find a decent latent space size for low quality audio data more diverse than simple sinewave compounds. 6 convolutional layers with symmetrical stride are used.\nLatent Space Size : 64 dimensions")
-    def cvae_core64(self):
+    @scenario(name="ResNet2D", version="low-dim256", description="Application of the residual network architecture on complexe, low-quality audio data. Latent Dim: 256")
+    def resnet_low256(self):
         self.mode = 1
-        model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[ 32, 64, 128, 256, 512, 1024],
-            conv_kernels=[  3,  3,   3,   3,   3,    3],
-            conv_strides=[  2,  2,   2,   2,   2,    2],
-            latent_space_dim=64
+        print(self.mode.spectrogram_size)
+        model = ResNet2D((1, *self.mode.spectrogram_size), 4, 32, 256)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0000078125)
         )
-        loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer

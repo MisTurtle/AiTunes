@@ -2,11 +2,11 @@ import torch.optim as optim
 
 from os import path
 
-from aitunes.modules import CVAE
+from aitunes.modules import CVAE, ResNet2D
 from aitunes.audio_generation.simple_audio_streams import generate_dataset_of_simple_instruments
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
-from aitunes.utils.loss_functions import simple_mse_kl_loss
+from aitunes.utils.loss_functions import *
 
 
 class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
@@ -52,44 +52,67 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         return None
     
     def _create_audios(self):
-        generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=5.0, unit_per_type=100)
+        generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=5.0, unit_per_type=500)
         
-    @scenario(name="Simple CVAE", version="1.0-LOW4", description="Scenarios in this series aim to find a decent latent space size for low quality audio data. 3 convolutional layers with symmetrical strides are used.\nLatent Space Size : 4 dimensions")
-    def cvae_core4(self):
+    @scenario(name="CVAE", version="low-dim2", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 2")
+    def cvae_low2(self):
         self.mode = 1
         model = CVAE(
             input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128],
-            conv_kernels=[   3,    3,    3],
-            conv_strides=[   2,    2,    2],
-            latent_space_dim=4
+            conv_filters=[  32,   64,  128,  256,  256],
+            conv_kernels=[   3,    3,    3,    3,    1],
+            conv_strides=[   2,    2,    2,    2,    1],
+            latent_space_dim=2
         )
-        loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.001)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
 
-    @scenario(name="Simple CVAE", version="1.0-LOW8", description="Scenarios in this series aim to find a decent latent space size for low quality audio data. 3 convolutional layers with symmetrical stride are used.\nLatent Space Size : 8 dimensions")
-    def cvae_core8(self):
+    @scenario(name="CVAE", version="low-dim16", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 16")
+    def cvae_low16(self):
         self.mode = 1
         model = CVAE(
             input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128],
-            conv_kernels=[   3,    3,    3],
-            conv_strides=[   2,    2,    2],
-            latent_space_dim=8
-        )
-        loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
-        return model, loss, optimizer
-    
-    @scenario(name="Simple CVAE", version="1.0-LOW16", description="Scenarios in this series aim to find a decent latent space size for low quality audio data. 3 convolutional layers with symmetrical stride are used.\nLatent Space Size : 16 dimensions")
-    def cvae_core16(self):
-        self.mode = 1
-        model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128],
-            conv_kernels=[   3,    3,    3],
-            conv_strides=[   2,    2,    2],
+            conv_filters=[  32,   64,  128,  256,  256],
+            conv_kernels=[   3,    3,    3,    3,    1],
+            conv_strides=[   2,    2,    2,    2,    1],
             latent_space_dim=16
         )
-        loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.000125)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
+
+    @scenario(name="CVAE", version="low-dim32", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 32")
+    def cvae_low32(self):
+        self.mode = 1
+        model = CVAE(
+            input_shape=[1, *self.mode.spectrogram_size],
+            conv_filters=[  32,   64,  128,  256,  256],
+            conv_kernels=[   3,    3,    3,    3,    1],
+            conv_strides=[   2,    2,    2,    2,    1],
+            latent_space_dim=32
+        )
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00003125)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        return model, loss, optimizer
+
+    @scenario(name="ResNet2D", version="low-dim32", description="Application of the residual network infrastructure on audio data. Results were pretty good with the CIFAR10 experiment, so this scenario will attempt to validate its superiority. Latent Dim: 32")
+    def resnet_low32(self):
+        self.mode = 1
+        model = ResNet2D((1, *self.mode.spectrogram_size), 4, 16, 32)
         
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00003125)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        return model, loss, optimizer

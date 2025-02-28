@@ -4,7 +4,11 @@
 
 assets/Samples/
 assets/Resources/
+
+assets/Models/cifar10
 assets/Models/gtzan/
 assets/Models/sinewave/
+assets/Models/fma/
+
 history/
 tests/output/

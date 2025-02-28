@@ -36,7 +36,7 @@ def scenario(name: str, version: str = "1.0", description: Union[str, None] = No
         f.name = name
         f.version = version
         f.description = description or "No description provided"
-        f.identifier = name.lower().replace(" ", "_") + "_v" + version
+        f.identifier = name.lower().replace(" ", "_") + "_" + version
         f._is_scenario = True
         return f
     

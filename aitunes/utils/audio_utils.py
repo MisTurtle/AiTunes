@@ -85,7 +85,8 @@ def precompute_spectrograms_for_audio_folder(
         eval_data = np.take(all_spectrograms, evaluation_indices, axis=0).astype(np.float32)
         eval_labels = np.take(all_labels, evaluation_indices, axis=0).astype("S")
         # Append to file
-        append_to_dataset(training_output, { "spectrograms": training_data, "labels": training_labels })
+        if len(training_data) > 0:
+            append_to_dataset(training_output, { "spectrograms": training_data, "labels": training_labels })
         append_to_dataset(evaluation_output, { "spectrograms": eval_data, "labels": eval_labels })
         # Clear lists
         all_spectrograms.clear()
@@ -102,7 +103,8 @@ def precompute_spectrograms_for_audio_folder(
             # Save and clear memory every x samples
             if len(all_spectrograms) >= flush_every:
                 flush()
-    flush()     
+    if len(all_spectrograms) > 0:
+        flush()     
     print(f"\r{all_count} spectrograms precomputed (including {eval_count} for tests) and saved as HDF5 datasets...")
 
 def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatures, audio_preprocessing: Callable[[np.ndarray], np.ndarray], spec_preprocessing: Callable[[np.ndarray], np.ndarray]):
@@ -140,7 +142,7 @@ def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatu
     return spectrograms, labels
 
 
-def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dataset, test_labels: Dataset, model: nn.Module, loss_criterion):
+def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dataset, test_labels: Dataset, model: nn.Module, loss_criterion, flatten: bool):
     """
     Inspired from https://matplotlib.org/stable/gallery/widgets/buttons.html
     
@@ -167,17 +169,14 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         nonlocal original_spectrogram, original_label, latent_sample, og_interface, rec_interface, loss, latent_size
 
         if generated_from_scratch:
-            rec_spec = model._decoder(latent_sample.unsqueeze(0))
+            rec_spec = model.decode(latent_sample.unsqueeze(0))
             original_spectrogram = original_label = og_interface = None
         else:
             original_spectrogram = test_loader[current_track]
             original_label = test_labels[current_track].decode('UTF-8')
+            
             model_input = torch.tensor(original_spectrogram, dtype=torch.float32).unsqueeze(0)
-
-            if not isinstance(model, CVAE):
-                model_input = model_input.flatten(start_dim=1, end_dim=2)
-            else:
-                model_input = model_input.unsqueeze(1)
+            model_input = model_input.flatten(start_dim=1, end_dim=2) if flatten else model_input.unsqueeze(1)
             
             latent_sample, rec_spec, *args = model(model_input)
             loss, *_ = loss_criterion(model_input, rec_spec, *args)
@@ -217,7 +216,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         nonlocal generated_from_scratch, latent_sample, bplayog
         bplayog.set_active(False)
         generated_from_scratch = True
-        latent_sample = torch.randn(latent_size) / 3
+        latent_sample = torch.randn(latent_size)
         display_track()
 
     def display_track(colorbar: bool = False):

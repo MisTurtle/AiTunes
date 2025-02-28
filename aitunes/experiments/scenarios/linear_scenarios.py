@@ -3,7 +3,7 @@ import torch.optim as optim
 
 from os import path
 from typing import Union
-from aitunes.utils.loss_functions import simple_mse_kl_loss, mse_loss
+from aitunes.utils.loss_functions import *
 from aitunes.experiments.cases import LinearExperiment
 from aitunes.modules import SimpleAutoEncoder, VariationalAutoEncoder
 from aitunes.experiments.scenarios._scenario_utils import ScenarioDescriptor, ScenarioContainer, scenario
@@ -31,14 +31,20 @@ class LinearAugmentationScenarios(ScenarioContainer):
         model, loss, optimizer = s(self)
         return LinearExperiment(model, model_path or s.model_path, loss, optimizer)
 
-    @scenario(name="Simple AE", version="1.0", description="A test to validate the SimpleAutoEncoder architecture")
+    @scenario(name="AE", version="mse", description="A test to validate the SimpleAutoEncoder architecture")
     def ae(self):
-        model = SimpleAutoEncoder((5, 3))
-        loss, optimizer = mse_loss, optim.Adam(model.parameters(), lr=0.001)
+        model = SimpleAutoEncoder((5, 4, 3))
+        loss = create_mse_loss(reduction='mean')
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
         
-    @scenario(name="Simple VAE", version="1.0", description="A test to validate the Variational AutoEncoder architecture")
+    @scenario(name="VAE", version="default", description="A test to validate the Variational AutoEncoder architecture. KL Loss weight: 0.001")
     def vae(self):
-        model = VariationalAutoEncoder((5, 3))
-        loss, optimizer = simple_mse_kl_loss, optim.Adam(model.parameters(), lr=0.001)
+        model = VariationalAutoEncoder((5, 4, 3))
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss(reduce=True), 0.001)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
+    

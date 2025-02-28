@@ -1,14 +1,5 @@
-from os import path, listdir, makedirs
-from typing import Any, Callable, Union
-from abc import ABC, abstractmethod
-from datetime import datetime
-
+import math
 import h5py
-import aitunes.utils as utils
-from aitunes.modules.autoencoder_modules import CVAE
-from aitunes.utils import get_loading_char
-from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
-
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +8,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from os import path, makedirs
+from typing import Any, Callable, Union
+from abc import ABC, abstractmethod
+from datetime import datetime
+
+import aitunes.utils as utils
+from aitunes.modules.autoencoder_modules import CVAE, ResNet2D
+from aitunes.utils import get_loading_char
+from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
+
 
 
 # Function taking 5 parameters:
@@ -51,7 +52,25 @@ class AutoencoderExperiment(ABC):
     
     @property
     def flatten(self) -> bool:
-        return not isinstance(self.model, CVAE)
+        return not isinstance(self.model, (CVAE, ResNet2D))
+    
+    @property
+    @abstractmethod
+    def batch_size(self) -> int:
+        """
+        :return: How many items are in a batch
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def batch_per_epoch(self) -> int:
+        """
+        :return: How many batches are in a training epoch (approximately, mostly used for loss annealing)
+        """
+        # Bad design choice, sadge, I can't access this for linear annealing from scenarios as the task isn't instantiated yet
+        # I also can't have it static or it would make it impossible for spectrogram based experiments to override the value
+        pass
     
     def set_plotting(self, plotting: bool) -> 'AutoencoderExperiment':
         self._support.plotting = plotting
@@ -117,15 +136,16 @@ class AutoencoderExperiment(ABC):
         self._support.log(f"A training session of {epochs} epochs is about to start...")
 
         for _ in range(epochs):
-            for batch, *_ in self.next_batch(training=True):
+            for batch, *extra in self.next_batch(training=True):
                 self._optimizer.zero_grad()
                 # Predict with the current model state and compute the loss
                 embedding, prediction, *args = self._model(batch)
-                batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
-                batch_loss.backward()
+                combined_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
+                combined_loss.backward()
+
                 # Run an optimizer step and log the result
                 self._optimizer.step()
-                self._support.add_batch_result(batch_loss.item(), *loss_components, batch_size=batch.shape[0]).log_training_loss()
+                self._support.add_batch_result(combined_loss.item(), *loss_components).log_training_loss()
 
             self._support.log_training_loss(ended=True).next_epoch()
             # Save the model only if necessary (checks are performed in the support directly)
@@ -143,7 +163,7 @@ class AutoencoderExperiment(ABC):
                 embedding, prediction, *args = self._model(batch)
                 batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
-                self._support.add_batch_result(batch_loss, *loss_components, batch_size=batch.shape[0]).log_running_loss("Evaluation", False, True)
+                self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)
             self._support.log_running_loss("Evaluation", True, False)
             
     @abstractmethod
@@ -151,8 +171,6 @@ class AutoencoderExperiment(ABC):
         """
         Starts an interactive interface where the user can interact and see the live results
         /!\\ Do not forget to disable training mode (For performance) /!\\
-        
-        TODO : See to use a decorator to remove boilerplate for individual tasks?
         """
         pass
 
@@ -164,9 +182,8 @@ class AutoencoderExperimentSupport:
         self.trained, self.plotting = False, False  # State and settings
         self.total_epochs, self.ran_epochs = 0, 0  # Total of epochs to be performed, total epochs lived by the model
 
-        self.batch_size = 0
-        # History of loss per batch for the current epoch. List of tuples where the first value is the total loss, and following values are components making up that loss
-        self.epoch_batch_losses = []
+        # History of avg loss per item for the current epoch. List of tuples where the first value is the total loss, and following values are components making up that loss
+        self.epoch_mean_item_losses = []
         # History of loss per epoch for all previous epochs. List of tuples where the first value is the total loss, and following values are components making up that loss
         self.all_epoch_item_losses = []
         
@@ -180,29 +197,17 @@ class AutoencoderExperimentSupport:
         return f"[{self._name}]"
     
     @property
-    def current_epoch_batch_count(self):
-        return len(self.epoch_batch_losses)
-
-    @property
-    def current_epoch_loss(self) -> tuple[float, ...]:
-        return np.sum(self.epoch_batch_losses, axis=0)
-    
-    @property
-    def current_average_batch_loss(self) -> tuple[float, ...]:
-        return np.mean(self.epoch_batch_losses, axis=0)
-    
-    @property
     def current_average_item_loss(self) -> tuple[float, ...]:
-        if self.batch_size == 0:
-            return np.zeros_like(self.current_average_batch_loss)
-        return self.current_average_batch_loss / self.batch_size
+        if len(self.epoch_mean_item_losses) == 0:
+            return 0
+        return np.mean(self.epoch_mean_item_losses, axis=0)
 
     @property
     def current_epoch_runtime(self):
         return time.time() - self.epoch_start
     
     def blank_epoch(self) -> 'AutoencoderExperimentSupport':
-        self.epoch_batch_losses.clear()
+        self.epoch_mean_item_losses.clear()
         self.epoch_start = time.time()
         return self
     
@@ -217,16 +222,15 @@ class AutoencoderExperimentSupport:
         self.total_epochs += n
         return self
     
-    def add_batch_result(self, loss: float, *loss_components: torch.Tensor, batch_size: int) -> 'AutoencoderExperimentSupport':
+    def add_batch_result(self, loss: float, *loss_components: torch.Tensor) -> 'AutoencoderExperimentSupport':
         """
-        Adds a batch loss to the current epoch
+        Adds a batch loss (avg loss per item) to the current epoch
         """
-        self.batch_size = batch_size
         if isinstance(loss, torch.Tensor):
             loss = loss.item()
         if len(loss_components) > 0:
             loss_components = map(lambda lc: lc.detach().cpu().numpy(), loss_components)
-        self.epoch_batch_losses.append((loss, *loss_components))
+        self.epoch_mean_item_losses.append((loss, *loss_components))
         return self
     
     # SAVING FUNCTIONS BELOW
@@ -238,7 +242,7 @@ class AutoencoderExperimentSupport:
         """
         :param save_to_path_fn: A function taking a path as a parameter and saving weights of the model there
         """
-        should_save = self.save_check is not None and self.save_check(self.ran_epochs, self.current_epoch_loss)
+        should_save = self.save_check is not None and self.save_check(self.ran_epochs, self.current_average_item_loss)
         force_save = self.ran_epochs == self.total_epochs
         should_save |= force_save  # Always save if the training is about to end
         
@@ -321,13 +325,13 @@ class AutoencoderExperimentSupport:
         if utils.quiet:
             return
         
-        epoch_loss = self.current_epoch_loss
+        # epoch_loss = self.current_epoch_loss
         item_loss = self.current_average_item_loss
-        epoch_loss_str = f"Epoch loss: {epoch_loss[0]:.2f}..."
+        # epoch_loss_str = f"Epoch loss: {epoch_loss[0]:.2f}..."
         item_loss_str = f"Item Loss: {item_loss[0]:.4f}"
         for component_id in range(item_loss.shape[0] - 1):
-            item_loss_str += f"... Comp #{component_id}: {item_loss[component_id + 1]:.4f}"
-        return f"{self.prefix} [{prefix}] Ran: {self.current_epoch_runtime:.2f}s... {epoch_loss_str} {item_loss_str}"
+            item_loss_str += f"... #{component_id}: {item_loss[component_id + 1]:.4f}"
+        return f"{self.prefix} [{prefix}] Ran: {self.current_epoch_runtime:.2f}s... {item_loss_str}"
 
     def log_running_loss(self, prefix: str, new_line: bool = False, loading: bool = True) -> 'AutoencoderExperimentSupport':
         if utils.quiet:
@@ -359,15 +363,19 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
         self.test_indices = np.arange(len(self.test_loader))
 
         self.mode = mode
-        self.batch_size = batch_size
+        self._batch_size = batch_size
+    
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size
+    
+    @property
+    def batch_per_epoch(self) -> int:
+        return int(math.ceil(len(self.train_loader) / self.batch_size))
 
     def next_batch(self, training: bool):
-        dataset = self.train_loader
-        indices = self.training_indices
-        if not training:
-            dataset = self.test_loader
-            indices = self.test_indices
-        
+        dataset = self.train_loader if training else self.test_loader
+        indices = self.training_indices if training else self.test_indices
         np.random.shuffle(indices)
 
         complete = False
@@ -378,18 +386,13 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
                 complete = True
             else:
                 batch_indices = indices[current_index:current_index + batch_size]
+                current_index += batch_size
 
             batch_indices = np.sort(batch_indices)
-            spectrograms = dataset[batch_indices]
-            spectrograms = torch.tensor(spectrograms, dtype=torch.float32)
-
-            if self.flatten:
-                spectrograms = spectrograms.flatten(start_dim=1, end_dim=2)
-            else:
-                spectrograms = spectrograms.unsqueeze(1)
+            spectrograms = torch.tensor(dataset[batch_indices], dtype=torch.float32)
+            spectrograms = spectrograms.flatten(start_dim=1, end_dim=2) if self.flatten else spectrograms.unsqueeze(1)
 
             yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
-            current_index += batch_size
 
     def interactive_evaluation(self):
         self.model.eval()
@@ -402,5 +405,6 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
                 # test_loader=self.train_loader,
                 # test_labels=self.train_labels,
                 model=self.model,
-                loss_criterion=self._loss_criterion
+                loss_criterion=self._loss_criterion,
+                flatten=self.flatten
             )
