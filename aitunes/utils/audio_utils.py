@@ -178,7 +178,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             model_input = torch.tensor(original_spectrogram, dtype=torch.float32).unsqueeze(0)
             model_input = model_input.flatten(start_dim=1, end_dim=2) if flatten else model_input.unsqueeze(1)
             
-            latent_sample, rec_spec, *args = model(model_input)
+            latent_sample, rec_spec, *args = model(model_input, training=False)
             loss, *_ = loss_criterion(model_input, rec_spec, *args)
             og_interface = reconstruct_audio(original_spectrogram, features, label=original_label)
             latent_size = int(latent_sample.shape[1])

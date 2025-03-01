@@ -1,10 +1,11 @@
+import torch.nn as nn
 import torch.optim as optim
 
 from os import path
 from aitunes.experiments.cases import Cifar10Experiment
 from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer, scenario
 from aitunes.utils.loss_functions import *
-from aitunes.modules import CVAE, ResNet2D
+from aitunes.modules import CVAE, ResNet2D, VQ_ResNet2D
 
 
 class Cifar10ReconstructionScenarios(ScenarioContainer):
@@ -105,4 +106,22 @@ class Cifar10ReconstructionScenarios(ScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
-    
+        
+    @scenario(name="VQ-ResNet2D", version="dim64", description="An attempt at implementing a simple VQ-VAE model (using the ResNet2D convolutional architecture). Latent Dim: 32")
+    def vq_resnet_low64(self):
+        self.mode = 1
+        model = VQ_ResNet2D(
+            input_shape=(3, 32, 32),
+            num_hiddens=128,
+            num_downsampling_layers=2,
+            num_residual_layers=2,
+            num_residual_hiddens=32,
+            embedding_dim=64,
+            num_embeddings=512
+        )
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0003)
+        return model, loss, optimizer

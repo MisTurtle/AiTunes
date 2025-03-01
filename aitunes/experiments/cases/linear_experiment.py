@@ -67,7 +67,7 @@ class LinearExperiment(AutoencoderExperiment):
             def update(_=None):
                 slider_data = np.array([[slider_1.val, slider_2.val, slider_3.val]], dtype=np.float32)
                 og_heights = LinearExperiment.expand_3d_vector(slider_data)
-                latent, rec_heights, *_ = self.model(torch.tensor(og_heights, dtype=torch.float32))
+                latent, rec_heights, *_ = self.model(torch.tensor(og_heights, dtype=torch.float32), training=False)
                 rec_heights = rec_heights.cpu().numpy()
 
                 for bar, height in zip(bar_og, og_heights[0]):

@@ -14,6 +14,8 @@ def combine_losses(*losses_with_weights):
         components = []
         for loss_fn, weight in losses_with_weights:
             loss_value = loss_fn(prediction, target, *args)[0]
+            if loss_value is None:
+                continue
             components.append(loss_value * weight)
         return torch.stack(components).sum(), *components
     return _
@@ -63,8 +65,6 @@ def create_kl_loss_with_cyclic_annealing(over_epochs: int, batch_per_epoch: int,
         return _loss_weight * kl[0], 
     return _loss
 
-
-
 def create_ssim_loss_function(win_size=7, reduction="elementwise_mean"):
     """
     :win_size: Kernel size to check for similarities
@@ -74,6 +74,22 @@ def create_ssim_loss_function(win_size=7, reduction="elementwise_mean"):
     def _loss(prediction, target, *args):
         return 1 - ssim(prediction, target),
     return _loss
+
+def create_cherry_picked_loss(indices: tuple[int], weights: tuple[float]):
+    """
+    > Created for VQ VAE models, to directly retrieve loss components returned by the model
+    :param indices: *args indices to the raw losses returned by the model. args[0] is the first argument after the returned reconstruction value
+    :param weights: Weight for each raw loss to be added together
+    """
+    def _loss(prediction, target, *args):
+        loss = torch.tensor(0.0, requires_grad=True)
+        for index in indices:
+            if args[index] is None:
+                continue
+            loss = loss + args[index] * weights[index]
+        return loss, 
+    return _loss
+
 
 def simple_mse_kl_loss(prediction, target, mu, log_var, beta = 1):
     log_var = torch.clamp(log_var, min=-10, max=10)

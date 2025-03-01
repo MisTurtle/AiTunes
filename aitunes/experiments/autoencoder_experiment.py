@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 import aitunes.utils as utils
-from aitunes.modules.autoencoder_modules import CVAE, ResNet2D
+from aitunes.modules.autoencoder_modules import CVAE, ResNet2D, VQ_ResNet2D
 from aitunes.utils import get_loading_char
 from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
@@ -52,7 +52,7 @@ class AutoencoderExperiment(ABC):
     
     @property
     def flatten(self) -> bool:
-        return not isinstance(self.model, (CVAE, ResNet2D))
+        return not isinstance(self.model, (CVAE, ResNet2D, VQ_ResNet2D))
     
     @property
     @abstractmethod
@@ -139,7 +139,7 @@ class AutoencoderExperiment(ABC):
             for batch, *extra in self.next_batch(training=True):
                 self._optimizer.zero_grad()
                 # Predict with the current model state and compute the loss
-                embedding, prediction, *args = self._model(batch)
+                embedding, prediction, *args = self._model(batch, training=True)
                 combined_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 combined_loss.backward()
 
@@ -160,7 +160,7 @@ class AutoencoderExperiment(ABC):
         
         with torch.no_grad():            
             for batch, *extra in self.next_batch(training=False):
-                embedding, prediction, *args = self._model(batch)
+                embedding, prediction, *args = self._model(batch, training=False)
                 batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
                 self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)

@@ -2,7 +2,7 @@ import torch.optim as optim
 
 from os import path
 
-from aitunes.modules import CVAE, ResNet2D
+from aitunes.modules import CVAE, ResNet2D, VQ_ResNet2D
 from aitunes.audio_generation.simple_audio_streams import generate_dataset_of_simple_instruments
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
@@ -116,3 +116,15 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
+    
+    @scenario(name="VQ-ResNet2D", version="low-dim32", description="An attempt at implementign a simple VQ-VAE model (using the ResNet2D convolutional architecture). Latent Dim: 32")
+    def vq_resnet_low32(self):
+        self.mode = 1
+        model = VQ_ResNet2D((1, *self.mode.spectrogram_size), 4, 16, 32, 8192)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        return model, loss, optimizer
+

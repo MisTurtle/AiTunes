@@ -18,7 +18,8 @@ class Cifar10Experiment(AutoencoderExperiment):
 
     def __init__(self, model, weights_path, loss, optimizer):
         super().__init__("CIFAR10", model, weights_path, loss, optimizer)
-        transform = transforms.ToTensor()
+        # transform = transforms.ToTensor()
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[1.0, 1.0, 1.0])])
         self.train_dataset = torchvision.datasets.CIFAR10(root=path.join("assets", "Samples", "CIFAR10"), train=True, download=True, transform=transform)
         self.test_dataset = torchvision.datasets.CIFAR10(root=path.join("assets", "Samples", "CIFAR10"), train=False, download=True, transform=transform)
 
@@ -80,13 +81,14 @@ class Cifar10Experiment(AutoencoderExperiment):
                     dataset = self.test_dataset if showing_test_dataset else self.train_dataset
                     data, _ = dataset[test_i if showing_test_dataset else train_i]
                     data = data.to(device).unsqueeze(0)
-                    latent_sample, rec_img, *args = self.model(data)
+                    latent_sample, rec_img, *args = self.model(data, training=False)
                     
                     loss = self._loss_criterion(rec_img, data, *args)
                     fig.suptitle(suptitle % loss[0])
 
                     
                     original_img = data[0].cpu().permute(1, 2, 0).numpy()
+                    original_img = np.clip(original_img, -0.5, 0.5) + 0.5
                     axes[0].imshow(original_img)
                     axes[0].axis('off')
                 else:
@@ -95,12 +97,13 @@ class Cifar10Experiment(AutoencoderExperiment):
                     axes[0].clear()
 
                 reconstructed_img = rec_img[0].cpu().permute(1, 2, 0).numpy()
+                reconstructed_img = np.clip(reconstructed_img, -0.5, 0.5) + 0.5
                 latent_vector = latent_sample[0].cpu().numpy()
 
                 axes[1].imshow(reconstructed_img)
                 axes[1].axis('off')
                 axes[2].clear()
-                axes[2].bar(range(len(latent_vector)), latent_vector)
+                # axes[2].bar(range(len(latent_vector)), latent_vector)
                 plt.show()
             
             def switch(_):
