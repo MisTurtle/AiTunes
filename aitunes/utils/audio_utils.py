@@ -14,7 +14,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.widgets import Button
 
 from aitunes.audio_processing import PreprocessingCollection, AudioProcessingInterface
-from aitunes.modules.autoencoder_modules import CVAE
+from aitunes.modules import AiTunesAutoencoderModule
 from aitunes.utils import get_loading_char, append_to_dataset
 
 
@@ -142,7 +142,7 @@ def precompute_spectrograms_for_audio_file(audio_path: str, features: AudioFeatu
     return spectrograms, labels
 
 
-def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dataset, test_labels: Dataset, model: nn.Module, loss_criterion, flatten: bool):
+def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dataset, test_labels: Dataset, model: AiTunesAutoencoderModule, loss_criterion):
     """
     Inspired from https://matplotlib.org/stable/gallery/widgets/buttons.html
     
@@ -176,7 +176,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             original_label = test_labels[current_track].decode('UTF-8')
             
             model_input = torch.tensor(original_spectrogram, dtype=torch.float32).unsqueeze(0)
-            model_input = model_input.flatten(start_dim=1, end_dim=2) if flatten else model_input.unsqueeze(1)
+            model_input = model_input.flatten(start_dim=1, end_dim=2) if model.flatten else model_input.unsqueeze(1)
             
             latent_sample, rec_spec, *args = model(model_input, training=False)
             loss, *_ = loss_criterion(model_input, rec_spec, *args)

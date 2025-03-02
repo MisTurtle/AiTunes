@@ -22,7 +22,7 @@ class LinearExperiment(AutoencoderExperiment):
     
     def __init__(self, model, weights_path, loss, optimizer):
         super().__init__("5D VECTORS", model, weights_path, loss, optimizer)
-        self.training_data = self.expand_3d_vector(np.random.rand(1000, 3))
+        self.training_data = self.expand_3d_vector(np.random.rand(2000, 3))
         self.evaluation_data = self.expand_3d_vector(np.random.rand(50, 3))
 
     @property

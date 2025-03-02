@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Sequence, Type, Union
 import numpy as np
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+# ActivationType type hint shortcut
+ActivationType = Union[None, Type[nn.Module]]
 
 
 class AiTunesAutoencoderModule(nn.Module, ABC):
@@ -26,11 +30,14 @@ class AiTunesAutoencoderModule(nn.Module, ABC):
     @property
     def latent_shape(self) -> tuple[int]:
         if self._latent_shape is None:
-            self._latent_shape = self.encode(torch.rand((1, *self.input_shape))).shape[1:]
+            dummy_encoded = self.encode(torch.rand((1, *self.input_shape)))
+            if isinstance(dummy_encoded, tuple):
+                dummy_encoded = dummy_encoded[0]
+            self._latent_shape = dummy_encoded.shape[1:]
         return self._latent_shape
 
     @abstractmethod
-    def forward(self, x, training):
+    def forward(self, x, training=False) -> tuple[torch.Tensor, torch.Tensor, ]:
         pass
 
     @abstractmethod
@@ -42,258 +49,274 @@ class AiTunesAutoencoderModule(nn.Module, ABC):
         pass
 
 
-##################################
-### Simple AutoEncoder Classes ###
-##################################
+###################################
+### Vanilla AutoEncoder Classes ###
+###################################
 
-class SimpleEncoder(nn.Module):
+class VanillaEncoder(nn.Module):
 
-    def __init__(self, dimensions):
+    def __init__(self, dimensions: Sequence[int]):
         """
-        :param dimensions: Dimensions starting from the input size and going until the latent space size
+        Vanilla Encoder class.
+
+        Args:
+            dimensions (Sequence[int]): List of dimensions serving as input and output features to fully-connected Linear layers
         """
         super().__init__()
-        assert len(dimensions) > 0
-
-        layers = []
-        for i in range(len(dimensions) - 1):
-            layers.append(nn.Linear(dimensions[i], dimensions[i + 1]))
-            if i != len(dimensions) - 2:
-                layers.append(nn.ReLU())
-        self._encoder = nn.Sequential(*layers)
+        self._dimensions = dimensions
+        self._layers = nn.Sequential()
+        self._build_layers()
+    
+    def _build_layers(self):
+        for i in range(len(self._dimensions) - 1):
+            self._layers.append(nn.Linear(self._dimensions[i], self._dimensions[i + 1]))
+            self._layers.append(nn.ReLU())
     
     def forward(self, x):
-        return self._encoder(x)
+        return self._layers(x)
 
 
-class SimpleDecoder(nn.Module):
+class VanillaDecoder(nn.Module):
 
-    def __init__(self, dimensions):
+    def __init__(self, dimensions: Sequence[int], activation_type: ActivationType):
         """
-        :param dimensions: Dimensions starting from the latent space size and going up until the output size
+        Vanilla Decoder class.
+
+        Args:
+            dimensions (Sequence[int]): List of dimensions serving as input and output features to fully-connected Linear layers
+            activation_type (ActivationType): Activation function to apply to the decoder output.
         """
         super().__init__()
-        assert len(dimensions) > 0
-
-        layers = []
-        for i in range(len(dimensions) - 1):
-            layers.append(nn.Linear(dimensions[i], dimensions[i + 1]))
-            if i != len(dimensions) - 2:
-                layers.append(nn.ReLU())
-        self._decoder = nn.Sequential(*layers)
+        self._dimensions = dimensions
+        self._layers = nn.Sequential()
+        self._activation = activation_type() if activation_type is not None else None
+        self._build_layers()
+    
+    def _build_layers(self):
+        for i in range(len(self._dimensions) - 1):
+            self._layers.append(nn.Linear(self._dimensions[i], self._dimensions[i + 1]))
+            if i != len(self._dimensions) - 2:
+                self._layers.append(nn.ReLU())
     
     def forward(self, x):
-        return self._decoder(x)
+        x = self._layers(x)
+        if self._activation is not None:
+            x = self._activation(x)
+        return x
 
 
-class SimpleAutoEncoder(AiTunesAutoencoderModule):
-    """
-    A vanilla auto encoder class
-    """
+class VanillaAutoEncoder(AiTunesAutoencoderModule):
 
-    def __init__(self, encoder_dimensions, decoder_activation: nn.Module = nn.Sigmoid):
-        super().__init__()
+    def __init__(self, input_shape: int, hidden_layer_dimensions: Sequence[int], latent_dimension: int, decoder_activation: ActivationType = None):
+        """
+        Vanilla Autoencoder Module, using simple fully-connected Linear layers to encoder and decode the input data
 
-        self._encoder = SimpleEncoder(encoder_dimensions)
-        self._decoder = SimpleDecoder(encoder_dimensions[::-1])
-        self._activation = decoder_activation()
-    
+        Args:
+            input_shape (int): Input data dimension (1d, linear)
+            hidden_layer_dimensions (Sequence[int]): Dimensions to map the input data to. More layers means more complexe mathematical operations can be performed
+            latent_dimension (int): Final dimension to which the inputs are mapped before being passed to the decoder
+            decoder_activation (ActivationType, optional): Activation function to apply to the decoder output. Defaults to None.
+        """
+        super().__init__((input_shape, ), True)
+        dimensions = [input_shape] + list(hidden_layer_dimensions) + [latent_dimension]
+        self._encoder = VanillaEncoder(dimensions=dimensions)
+        self._decoder = VanillaDecoder(dimensions=dimensions[::-1], activation_type=decoder_activation)
+
     def encode(self, x):
         return self._encoder(x)
 
-    def decode(self, latent):
-        return self._activation(self._decoder(latent))
-
-    def forward(self, x, training):
-        embedding = self.encode(x)
-        return embedding, self.decode(embedding)
+    def decode(self, z):
+        return self._decoder(z)
+    
+    def forward(self, x, training=False):
+        z = self.encode(x)
+        return z, self.decode(z)
 
 
 #######################################
 ### Variational AutoEncoder classes ###
 #######################################
 
-class VariationalEncoder(nn.Module):
+def reparameterize(mu, log_var):
+    sigma = torch.exp(0.5 * log_var)
+    epsilon = torch.randn_like(sigma)
+    return mu + sigma * epsilon
 
-    def __init__(self, dimensions):
+
+class VariationalAutoEncoder(AiTunesAutoencoderModule):
+
+    def __init__(self, input_shape: int, hidden_layers_dimensions: Sequence[int], latent_dimension: int, decoder_activation: ActivationType = None):
+        super().__init__((input_shape, ), True)
+        dimensions = [input_shape] + list(hidden_layers_dimensions) + [latent_dimension]
+        self._encoder = VanillaEncoder(dimensions=dimensions[:-1])  # Encode up to before the latent dimension
+        self._decoder = VanillaDecoder(dimensions=dimensions[::-1], activation_type=decoder_activation)  # Decode from the latent dimension
+        self._mu = nn.Linear(dimensions[-2], dimensions[-1])
+        self._log_var = nn.Linear(dimensions[-2], dimensions[-1])
+    
+    def encode(self, x):
+        x = self._encoder(x)
+        mu = self._mu(x)
+        log_var = self._log_var(x)
+        return mu, log_var
+
+    def decode(self, z):
+        return self._decoder(z)
+
+    def forward(self, x, training=False):
+        mu, log_var = self.encode(x)
+        z = reparameterize(mu, log_var)
+        return z, self.decode(z), mu, log_var
+
+
+#################################
+### Convolutional VAE classes ###
+#################################
+
+def compute_transpose_padding(kernel_size: int, padding: int, stride: Union[int, tuple[int, int]], input_shape: tuple[int, int], output_shape: tuple[int, int]):
+    """
+    Computes padding and output_padding for ConvTranspose2d layers
+
+    Args:
+        kernel_size (int): Kernel size applied to the corresponding Conv2d layer
+        padding (int): Padding applied to the corresponding Conv2d layer
+        stride (Union[int, tuple[int, int]]): Stride applied to the corresponding Conv2d layer
+        input_shape (tuple[int, int]): Input shape passed as argument to the target ConvTranspose2d layer (Height, Width)
+        output_shape (tuple[int, int]): Target output shape (Height, Width)
+
+    Returns:
+        tuple[int, int]: padding_height, padding_width
+    """
+    if not isinstance(stride, tuple):
+        stride = stride, stride
+    h_out = (input_shape[0] - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
+    w_out = (input_shape[1] - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
+    p_h, p_w = output_shape[0] - h_out, output_shape[1] - w_out
+
+    # --- Debug
+    # print("--- ")
+    # print("ConvTranspose2d Input Shape:", input_shape)
+    # print("ConvTranspose2d Target Output Shape:", output_shape)
+    # print("ConvTranspose2d Current Output Shape:", (h_out, w_out)),
+    # print("Computed Padding (H, W):", (p_h, p_w))
+
+    return p_h, p_w
+
+
+class ConvolutionalEncoder(nn.Module):
+
+    def __init__(self, input_shape: Sequence[int], conv_channels: Sequence[int], conv_kernels: Sequence[int], conv_strides: Sequence[int], latent_dimension: int):
         super().__init__()
-        assert len(dimensions) > 1
+        self._input_shape = input_shape
+        self._channels = conv_channels
+        self._kernels = conv_kernels
+        self._strides = conv_strides
+        self._latent_dimension = latent_dimension
 
-        layers = []
-        for i in range(len(dimensions) - 2):
-            layers.append(nn.Linear(dimensions[i], dimensions[i + 1]))
-            layers.append(nn.ReLU())
-        self._encoder = nn.Sequential(*layers)
-        
-        self.mu = nn.Linear(dimensions[-2], dimensions[-1])  # Mu
-        self.log_var = nn.Linear(dimensions[-2], dimensions[-1])  # Log of variance
+        self._shapes = [input_shape[1:]]  # Get rid of the channels
+        self._layers = nn.Sequential()
+        self._build_layers()
+        self._mu = nn.Linear(self._channels[-1] * np.prod(self._shapes[-1]), self._latent_dimension)
+        self._log_var = nn.Linear(self._channels[-1] * np.prod(self._shapes[-1]), self._latent_dimension)
+
+    @property
+    def shapes(self) -> list[tuple[int, int]]:
+        return self._shapes
+    
+    def _build_layers(self):
+        dummy = torch.randn((1, *self._input_shape))
+        for i in range(len(self._channels) - 1):
+            self._layers.append(nn.Conv2d(
+                in_channels=self._channels[i],
+                out_channels=self._channels[i + 1],
+                kernel_size=self._kernels[i],
+                stride=self._strides[i],
+                padding=self._kernels[i] // 2
+            ))
+            self._layers.append(nn.BatchNorm2d(self._channels[i + 1]))
+            self._layers.append(nn.ReLU())
+            self._shapes.append(self._layers(dummy).shape[2:])  # Get rid of the batch size and channels (extract H, W)
+        self._layers.append(nn.Flatten())
     
     def forward(self, x):
-        x = self._encoder(x)
-        mu, log_var = self.mu(x), self.log_var(x)
+        x = self._layers(x)
+        mu = self._mu(x)
+        log_var = self._log_var(x)
         return mu, log_var
 
 
-class VariationalAutoEncoder(nn.Module):
-    """
-    A variational auto encoder class
-    """
-    def __init__(self, encoder_dimensions, decoder_activation: nn.Module = nn.Sigmoid):
+class ConvolutionalDecoder(nn.Module):
+    
+    def __init__(self, target_shapes: Sequence[int], conv_channels: Sequence[int], conv_kernels: Sequence[int], conv_strides: Sequence[int], latent_dimension: int, activation_type: ActivationType = None):
         super().__init__()
+        self._target_shapes = target_shapes
+        self._channels = conv_channels
+        self._kernels = conv_kernels
+        self._strides = conv_strides
+        self._latent_dimension = latent_dimension
+        self._activation_type = activation_type
 
-        self._encoder = VariationalEncoder(encoder_dimensions)
-        self._decoder = SimpleDecoder(encoder_dimensions[::-1])
-        self._activation = decoder_activation()
+        self._layers = nn.Sequential()
+        self._build_layers()
     
-    def encode(self, x):
-        return self._encoder(x)
-
-    def reparameterize(self, mu, log_var):
-        sigma = torch.exp(0.5 * log_var)
-        epsilon = torch.randn_like(sigma)
-        return mu + sigma * epsilon
-    
-    def decode(self, z):
-        return self._activation(self._decoder(z))
-
-    def forward(self, x, training):
-        mu, log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
-        return z, self.decode(z), mu, log_var
+    def _build_layers(self):
+        self._layers.append(nn.Linear(self._latent_dimension, self._channels[0] * np.prod(self._target_shapes[0])))
+        self._layers.append(nn.Unflatten(1, (self._channels[0], *self._target_shapes[0])))
+        for i in range(len(self._channels) - 1):
+            p_h, p_w = compute_transpose_padding(self._kernels[i], self._kernels[i] // 2, self._strides[i], self._target_shapes[i], self._target_shapes[i + 1])
+            self._layers.append(nn.ConvTranspose2d(
+                in_channels=self._channels[i],
+                out_channels=self._channels[i + 1],
+                kernel_size=self._kernels[i],
+                stride=self._strides[i],
+                padding=self._kernels[i] // 2,
+                output_padding=(p_h, p_w)
+            ))
+            if i != len(self._channels) - 2:
+                self._layers.append(nn.BatchNorm2d(self._channels[i + 1]))
+                self._layers.append(nn.ReLU())
         
+        if self._activation_type is not None:
+            self._layers.append(self._activation_type())
+    
+    def forward(self, x):
+        return self._layers(x)
 
-def compute_transpose_padding(kernel_size: int, stride: Union[int, tuple[int, int]], shape_at_i: list[int], i: int):
-    kernel_size, stride = kernel_size, stride if isinstance(stride, tuple) else (stride, stride)
-    padding = kernel_size // 2
-    h_in, w_in = shape_at_i[i]
-    h_out = (h_in - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
-    w_out = (w_in - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
-    h_out_target, w_out_target = shape_at_i[i + 1] if i < len(shape_at_i) - 1 else shape_at_i[-1]
-    p_h, p_w = h_out_target - h_out, w_out_target - w_out
-    # print(f"Shape after {i + 1} transpose convolutions should be {(h_out_target, w_out_target)}")
-    # print("Output size:", h_out, w_out)
-    # print("Target output size:", h_out_target, w_out_target)
-    # print("Padding:", padding, " H:", p_h, "W:", p_w)
-    return padding, (p_h, p_w)
-
-
-##################################
-### Convolutionnal VAE classes ###
-##################################
-
+        
 class CVAE(AiTunesAutoencoderModule):
 
-    def __init__(self, input_shape, conv_filters, conv_kernels, conv_strides, latent_space_dim):
-        super().__init__(input_shape=input_shape, flatten=False)
+    def __init__(self, input_shape, conv_channels: Sequence[int], conv_kernels: Sequence[int], conv_strides: Sequence[int], latent_dimension: int, decoder_activation: ActivationType = None):
+        super().__init__(input_shape, False)
+        self._conv_channels = [input_shape[0]] + list(conv_channels)
+        self._conv_kernels = conv_kernels
+        self._conv_strides = conv_strides
+        self._latent_dimension = latent_dimension
         
-        self.conv_filters = conv_filters  # Number of channels to output after each layer
-        self.conv_kernels = conv_kernels  # Convolutional kernel size
-        self.conv_strides = list(map(lambda x: x if isinstance(x, tuple) else (x, x), conv_strides))  # How much to move the kernel after each iteration
-        self.latent_space_dim = latent_space_dim  # To which dimension is the data compressed
-        self.shape_at_i = []  # Padding to apply on ConvTranspose2d to consistently obtain an output the same size as the input (Because different input sizes produce the same output size)
-        self._shape_before_bottleneck = self._calculate_shape_before_bottleneck()
-        
-        # Encoder and Decoder
-        self._encoder = self._create_encoder()
-        self._mu = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
-        self._log_var = nn.Linear(self._shape_before_bottleneck[0], self.latent_space_dim)
-        self._decoder = self._create_decoder()
-
-
-    def _create_encoder(self):
-        layers = []
-        input_channels = self.input_shape[0]
-
-        # Couches convolutionnelles
-        for out_channels, kernel_size, stride in zip(self.conv_filters, self.conv_kernels, self.conv_strides):
-            layers.append(nn.Conv2d(input_channels, out_channels, kernel_size, stride, padding=kernel_size//2))
-            # layers.append(nn.BatchNorm2d(out_channels)) #Normalisation. Removed from the encoder because batch-wide normalization doesn't fit well with KL divergence
-            layers.append(nn.ReLU())  #non-linéarité
-            input_channels = out_channels
-        
-        layers.append(nn.Flatten())
-        return nn.Sequential(*layers) 
-    
-    def _compute_decoder_padding(self, i) -> tuple[int, int]:
-        """
-        Takes the index of a convolutional layer and computes the padding to apply to its transpose to get the exact same output shape
-        :param conv_index: The convolutional layer index
-        :return: Symmetrical padding, one-sided padding
-        """
-        kernel_size, stride = self.conv_kernels[i], self.conv_strides[i]
-        
-        padding = kernel_size // 2
-
-        h_in, w_in = self.shape_at_i[i]
-        h_out = (h_in - 1) * stride[0] - 2 * padding + 1 * (kernel_size - 1) + 1
-        w_out = (w_in - 1) * stride[1] - 2 * padding + 1 * (kernel_size - 1) + 1
-        h_out_target, w_out_target = self.shape_at_i[i - 1] if i > 0 else self.input_shape[1:]
-        p_h, p_w = h_out_target - h_out, w_out_target - w_out
-
-        # Source: https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html
-        # Do not remove the following, in case things break again ;-;
-        # print(f"Shape before {i} convolution should be {self.shape_at_i[i]}")
-        # print("Output size:", h_out, w_out)
-        # print("Target output size:", h_out_target, w_out_target)
-
-        return padding, (p_h, p_w)
-
-    def _create_decoder(self):
-        layers = [nn.Linear(self.latent_space_dim, self._shape_before_bottleneck[0])]
-        
-        # Transformee le vecteur 1D en une forme 3D
-        layers.append(nn.Unflatten(1, self._shape_before_bottleneck[1:]))
-
-        input_channels = self.conv_filters[-1]
-        for i in range(len(self.conv_filters) - 1, 0, -1):
-            out_channels, kernel_size, stride = self.conv_filters[i - 1], self.conv_kernels[i], self.conv_strides[i]
-            padding, (p_h, p_w) = self._compute_decoder_padding(i)
-            
-            layers.append(nn.ConvTranspose2d(input_channels, out_channels, kernel_size, stride, padding=padding, output_padding=(p_h, p_w)))
-            layers.append(nn.BatchNorm2d(out_channels))
-            layers.append(nn.ReLU())
-            
-            input_channels = out_channels
-
-        padding, (p_h, p_w) = self._compute_decoder_padding(0)
-        layers.append(nn.ConvTranspose2d(input_channels, self.input_shape[0], self.conv_kernels[0], self.conv_strides[0], padding=padding, output_padding=(p_h, p_w)))
-        layers.append(nn.Sigmoid())
-        
-        return nn.Sequential(*layers)
-    
-    def _calculate_shape_before_bottleneck(self):
-        """
-        Calcule les dimensions exactes avant la couche de goulot d'étranglement, et la taille attendue pour chaque convolution inverse (pour calcul du padding)
-        """
-        h, w = self.input_shape[1:]
-        
-        for kernel_size, stride in zip(self.conv_kernels, self.conv_strides):
-            # Compute the output size from the conv layer
-            padding = kernel_size // 2
-            h = (h + 2 * padding - kernel_size) // stride[0] + 1
-            w = (w + 2 * padding - kernel_size) // stride[1] + 1
-
-            self.shape_at_i.append((h, w))
-        
-        flattened_size = self.conv_filters[-1] * h * w
-        return (flattened_size, self.conv_filters[-1], h, w)
+        self._encoder = ConvolutionalEncoder(
+            input_shape,
+            self._conv_channels,
+            self._conv_kernels,
+            self._conv_strides,
+            self._latent_dimension
+        )
+        self._decoder = ConvolutionalDecoder(
+            self._encoder.shapes[::-1],
+            self._conv_channels[::-1],
+            self._conv_kernels[::-1],
+            self._conv_strides[::-1],
+            self._latent_dimension,
+            decoder_activation
+        )
 
     def encode(self, x):
-        x = self._encoder(x)
-        mu, log_var = self._mu(x), self._log_var(x)
+        mu, log_var = self._encoder(x)
         return mu, log_var
-
-    def reparameterize(self, mu, log_var):
-        epsilon = torch.randn_like(mu)
-        sigma = torch.exp(0.5 * log_var)
-        return mu + sigma * epsilon
 
     def decode(self, z):
         return self._decoder(z)
     
-    def forward(self, x, training):
+    def forward(self, x, training=False):
         mu, log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
+        z = reparameterize(mu, log_var)
         return z, self.decode(z), mu, log_var
 
 
@@ -302,129 +325,123 @@ class CVAE(AiTunesAutoencoderModule):
 ###################################################
 # Inspired from https://github.com/LukeDitria/CNN-VAE/blob/master/RES_VAE.py
 
-class ResnetDownsampler(nn.Module):
+class ResnetDownsamplerV1(nn.Module):
 
     def __init__(self, channels_in: int, channels_out: int, kernel_size: int):
         super().__init__()
-        self.channels_in = channels_in
-        self.channels_out = channels_out
-        self.kernel_size = kernel_size
+        self._channels_in = channels_in
+        self._channels_out = channels_out
+        self._kernel_size = kernel_size
         
-        self.conv1 = nn.Conv2d(channels_in, channels_out // 2, kernel_size, stride=2, padding=kernel_size // 2)
-        self.bn1 = nn.BatchNorm2d(channels_out // 2)
-        self.conv2 = nn.Conv2d(channels_out // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
-        self.bn2 = nn.BatchNorm2d(channels_out)
-        self.conv_skipping = nn.Conv2d(channels_in, channels_out, kernel_size=1, stride=2)
-        self.activation = nn.ReLU()
+        self._conv1 = nn.Conv2d(channels_in, channels_out // 2, kernel_size, stride=2, padding=kernel_size // 2)
+        self._bn1 = nn.BatchNorm2d(channels_out // 2)
+        self._conv2 = nn.Conv2d(channels_out // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
+        self._bn2 = nn.BatchNorm2d(channels_out)
+        self._conv_skipping = nn.Conv2d(channels_in, channels_out, kernel_size, stride=2, padding=kernel_size // 2)
+        self._activation = nn.ReLU()
     
     def forward(self, x):
-        skipping = self.conv_skipping(x)
-        x = self.activation(self.bn1(self.conv1(x)))
-        x = self.activation(self.bn2(self.conv2(x) + skipping))
+        skipping = self._conv_skipping(x)
+        x = self._activation(self._bn1(self._conv1(x)))
+        x = self._activation(self._bn2(self._conv2(x) + skipping))
         return x
 
 
-class ResnetUpsampler(nn.Module):
+class ResnetUpsamplerV1(nn.Module):
     """
     Simple ResNet UpSampler
     """
 
-    def __init__(self, channels_in: int, channels_out: int, kernel_size: int, shape_at_i: list[tuple[int]], i: int):
+    def __init__(self, channels_in: int, channels_out: int, kernel_size: int, output_padding: tuple[int, int]):
         super().__init__()
-        self.channels_in = channels_in
-        self.channels_out = channels_out
-        self.kernel_size = kernel_size
-        self.shape_at_i = shape_at_i
-        self.i = i
-        self.padding, self.output_padding = compute_transpose_padding(kernel_size, stride=2, shape_at_i=shape_at_i, i=i)
+        self._channels_in = channels_in
+        self._channels_out = channels_out
+        self._kernel_size = kernel_size
+        self._output_padding = output_padding
 
-        self.conv1 = nn.ConvTranspose2d(channels_in, channels_in // 2, kernel_size, stride=2, padding=self.padding, output_padding=self.output_padding)
-        self.bn1 = nn.BatchNorm2d(channels_in // 2)
-        self.conv2 = nn.ConvTranspose2d(channels_in // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
-        self.bn2 = nn.BatchNorm2d(channels_out)
-        self.conv_skipping = nn.ConvTranspose2d(channels_in, channels_out, kernel_size=1, stride=2, output_padding=self.output_padding)
-        self.activation = nn.ReLU()
-    
+        self._conv1 = nn.ConvTranspose2d(channels_in, channels_in // 2, kernel_size, stride=2, padding=kernel_size // 2, output_padding=self._output_padding)
+        self._bn1 = nn.BatchNorm2d(channels_in // 2)
+        self._conv2 = nn.ConvTranspose2d(channels_in // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
+        self._bn2 = nn.BatchNorm2d(channels_out)
+        self._conv_skipping = nn.ConvTranspose2d(channels_in, channels_out, kernel_size, stride=2, padding=kernel_size // 2, output_padding=self._output_padding)
+        self._activation = nn.ReLU()
+        
     def forward(self, x):
-        skipping = self.conv_skipping(x)
-        x = self.activation(self.bn1(self.conv1(x)))
-        x = self.activation(self.bn2(self.conv2(x) + skipping))
+        skipping = self._conv_skipping(x)
+        x = self._activation(self._bn1(self._conv1(x)))
+        x = self._activation(self._bn2(self._conv2(x) + skipping))
+        # x = self._activation(self._bn2(self._conv2(x)) + skipping)  # TODO : Try this out instead?
         return x
         
 
-class ResNet2D(AiTunesAutoencoderModule):
+class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE class by passing some generator for encoder and decoder modules, but would make the structure less readable (and I'm lazy, so yeah)
 
-    def __init__(self, input_size: tuple[int, ...], residual_blocks: int, residual_channels: int, latent_space_dim: int, activation_type: Union[nn.Module, tuple[nn.Module, nn.Module]] = nn.Sigmoid):
-        super().__init__(input_shape=input_size, flatten=False)
-        self.residual_block_count = residual_blocks
-        self.residual_channels = residual_channels
-        self.latent_space_dim = latent_space_dim
-        self.activation_type = (activation_type, activation_type) if not isinstance(activation_type, tuple) else activation_type
-        self.shape_at_i = [self.input_size[1:]]
-
+    def __init__(self, input_shape: Sequence[int], residual_blocks: int, residual_channels: int, latent_space_dim: int, decoder_activation: ActivationType = None):
+        super().__init__(input_shape=input_shape, flatten=False)
+        self._residual_block_count = residual_blocks
+        self._residual_channels = residual_channels
+        self._latent_space_dim = latent_space_dim
+        self._decoder_activation = decoder_activation
+        # Encoder shapes tracking to be used in the decoder
+        self._shapes = [self.input_shape[1:]]
+        self._shape_before_bottleneck = None
+        # Modules
         self._encoder = self._create_encoder()
-        self._decoder = self._create_decoder()
-        
-        self._mu = nn.Linear(np.prod(self._shape_before_bottleneck), self.latent_space_dim)
-        self._log_var = nn.Linear(np.prod(self._shape_before_bottleneck), self.latent_space_dim)
-        self._activation = activation_type()
+        self._decoder = self._create_decoder()        
+        self._mu = nn.Linear(np.prod(self._shape_before_bottleneck), self._latent_space_dim)
+        self._log_var = nn.Linear(np.prod(self._shape_before_bottleneck), self._latent_space_dim)
 
     def _create_encoder(self):
         encoder = nn.Sequential()
-        encoder.add_module("ConvIn", nn.Conv2d(self.input_size[0], self.residual_channels, kernel_size=3, stride=2, padding=1))
-        if self.activation_type[0] is not None:
-            encoder.add_module("ConvInAct", self.activation_type[0]())
+        encoder.append(nn.Conv2d(self.input_shape[0], self._residual_channels, kernel_size=3, stride=2, padding=1))
+        encoder.append(nn.ReLU())
+        dummy = torch.tensor(np.random.random((1, *self.input_shape)), dtype=torch.float32)
 
-        channels_in = self.residual_channels
-        dummy = torch.tensor(np.random.random(self.input_size), dtype=torch.float32).unsqueeze(0)
-        self.shape_at_i.append(encoder(dummy).shape[2:])
-        for i in range(self.residual_block_count):
-            encoder.add_module(f"ResBlock_Down{i}", ResnetDownsampler(channels_in, channels_in * 2, 3))
-            self.shape_at_i.append(encoder(dummy).shape[2:])
+        channels_in = self._residual_channels
+        self._shapes.append(encoder(dummy).shape[2:])
+        for _ in range(self._residual_block_count):
+            encoder.append(ResnetDownsamplerV1(channels_in, channels_in * 2, 3))
+            self._shapes.append(encoder(dummy).shape[2:])
             channels_in *= 2
         self._shape_before_bottleneck = encoder(dummy).shape[1:]
-
-        encoder.add_module("Flatten", nn.Flatten())
-
+        encoder.append(nn.Flatten())
         return encoder
     
     def _create_decoder(self) -> list[nn.Module]:
         decoder = nn.Sequential()
-        decoder.add_module("FromLatent", nn.Linear(self.latent_space_dim, np.prod(self._shape_before_bottleneck)))
-        decoder.add_module("Unflatten", nn.Unflatten(1, self._shape_before_bottleneck))
+        decoder.append(nn.Linear(self._latent_space_dim, np.prod(self._shape_before_bottleneck)))
+        decoder.append(nn.Unflatten(1, self._shape_before_bottleneck))
 
-        channels_in = self.residual_channels * (2 ** self.residual_block_count)
-        for i in range(self.residual_block_count):
-            decoder.add_module(f"ResBlock_Up{i}", ResnetUpsampler(channels_in, channels_in // 2, 3, self.shape_at_i[::-1], i))
+        channels_in = self._residual_channels * (2 ** self._residual_block_count)
+        for i in range(self._residual_block_count):
+            input_shape, output_shape = self._shapes[::-1][i], self._shapes[::-1][i + 1]
+            output_padding = compute_transpose_padding(kernel_size=3, padding=3 // 2, stride=2, input_shape=input_shape, output_shape=output_shape)
+            decoder.append(ResnetUpsamplerV1(channels_in, channels_in // 2, 3, output_padding))
             channels_in //= 2
         
-        padding, output_padding = compute_transpose_padding(3, 2, self.shape_at_i[::-1], self.residual_block_count)
-        decoder.add_module("ToRecons", nn.ConvTranspose2d(self.residual_channels, self.input_size[0], kernel_size=3, stride=2, padding=padding, output_padding=output_padding))
-        if self.activation_type[1] is not None:
-            decoder.add_module("ActRecons", self.activation_type[1]())
+        output_padding = compute_transpose_padding(kernel_size=3, padding=1, stride=2, input_shape=self._shapes[1], output_shape=self._shapes[0])
+        decoder.append(nn.ConvTranspose2d(self._residual_channels, self.input_shape[0], kernel_size=3, stride=2, padding=1, output_padding=output_padding))
+        if self._decoder_activation is not None:
+            decoder.append(self._decoder_activation())
         return decoder
         
     def encode(self, x):
         x = self._encoder(x)
         return self._mu(x), self._log_var(x)
     
-    def reparameterize(self, mu, log_var):
-        epsilon = torch.randn_like(mu)
-        sigma = torch.exp(0.5 * log_var)
-        return mu + sigma * epsilon
-    
     def decode(self, z):
         return self._decoder(z)
     
-    def forward(self, x, training):
+    def forward(self, x, training=False):
         mu, log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
+        z = reparameterize(mu, log_var)
         return z, self.decode(z), mu, log_var
     
     
-########################################
-### Even smarter 2d residual network ###
-########################################
+####################################################################################
+### Even smarter 2d residual network, with easy support for deeper architectures ###
+####################################################################################
+# Performance for the previous ResNet architecture would probably be very similar if support for additional residual layers without downsampling was added 
 
 class ResidualStackV2(nn.Module):
 
@@ -653,7 +670,7 @@ class VectorQuantizer(nn.Module):
         self.last_codebook_loss = torch.tensor(0.0, requires_grad=False)
         self.last_commitment_loss = torch.tensor(0.0, requires_grad=True)
     
-    def forward(self, x, training):
+    def forward(self, x, training=False):
         flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
         distances = (
             (flat_x ** 2).sum(1, keepdim=True)  # squared input
@@ -738,7 +755,7 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
-    def forward(self, x, training):
+    def forward(self, x, training=False):
         x = self.encode(x)
         quantized, codebook_loss, commitment_loss = self.quantize(x, training)
         recon = self.decode(quantized)

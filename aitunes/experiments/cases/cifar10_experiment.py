@@ -40,7 +40,7 @@ class Cifar10Experiment(AutoencoderExperiment):
         
         for data, labels in dataset:  # Might use labels later
             data = data.to(device)
-            if self.flatten:
+            if self.model.flatten:
                 yield data.view(data.size(0), -1), labels
             else:
                 yield data, labels

@@ -44,7 +44,7 @@ class MnistExperiment(AutoencoderExperiment):
         
         for data, labels in dataset:  # Might use labels later
             data = data.to(device)
-            if self.flatten:
+            if self.model.flatten:
                 yield data.view(data.size(0), -1), labels
             else:
                 yield data, labels
@@ -79,7 +79,7 @@ class MnistExperiment(AutoencoderExperiment):
                 x_val, y_val = float(slider_x.val), float(slider_y.val)
 
                 point.set_data([x_val], [y_val])
-                if self.flatten:
+                if self.model.flatten:
                     decoder_input = torch.tensor([x_val, y_val], dtype=torch.float32)
                 else:
                     decoder_input = torch.tensor([[x_val, y_val]], dtype=torch.float32)

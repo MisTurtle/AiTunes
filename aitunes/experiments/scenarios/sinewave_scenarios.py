@@ -2,7 +2,7 @@ import torch.optim as optim
 
 from os import path
 
-from aitunes.modules import CVAE, ResNet2D, VQ_ResNet2D
+from aitunes.modules import CVAE, ResNet2dV1, VQ_ResNet2D
 from aitunes.audio_generation.simple_audio_streams import generate_dataset_of_simple_instruments
 from aitunes.experiments.scenarios._scenario_utils import AudioBasedScenarioContainer, scenario
 from aitunes.utils.audio_utils import HighResolutionAudioFeatures, LowResolutionAudioFeatures
@@ -108,7 +108,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     @scenario(name="ResNet2D", version="low-dim32", description="Application of the residual network infrastructure on audio data. Results were pretty good with the CIFAR10 experiment, so this scenario will attempt to validate its superiority. Latent Dim: 32")
     def resnet_low32(self):
         self.mode = 1
-        model = ResNet2D((1, *self.mode.spectrogram_size), 4, 16, 32)
+        model = ResNet2dV1((1, *self.mode.spectrogram_size), 4, 16, 32)
         
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),

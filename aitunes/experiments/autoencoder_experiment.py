@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torchsummary import summary
 
 from os import path, makedirs
 from typing import Any, Callable, Union
@@ -14,9 +15,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 import aitunes.utils as utils
-from aitunes.modules.autoencoder_modules import CVAE, ResNet2D, VQ_ResNet2D
+from aitunes.modules import AiTunesAutoencoderModule
 from aitunes.utils import get_loading_char
-from aitunes.modules import SimpleAutoEncoder as SAE, VariationalAutoEncoder as VAE
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
 
 
@@ -35,7 +35,7 @@ class AutoencoderExperiment(ABC):
     Anything that is not directly related to the test contents or the model is handled by an AutoencoderExperimentSupport instance for better visibility (maybe)
     """
 
-    def __init__(self, name: str, model: Union[SAE, VAE], weights_path: str, loss_criterion: nn.Module, optimizer: optim.Optimizer):
+    def __init__(self, name: str, model: AiTunesAutoencoderModule, weights_path: str, loss_criterion: nn.Module, optimizer: optim.Optimizer):
         self._model = model
         self._weights_path = weights_path
         self._support = AutoencoderExperimentSupport(name)
@@ -44,15 +44,12 @@ class AutoencoderExperiment(ABC):
         self._optimizer: optim.Optimizer = optimizer
         self._middlewares = []  # Middlewares applied when evaluating the model (Probably for plotting visual information)
 
+        summary(model, model.input_shape, device=utils.device.type)
         self._load_weights()
 
     @property
     def model(self):
         return self._model
-    
-    @property
-    def flatten(self) -> bool:
-        return not isinstance(self.model, (CVAE, ResNet2D, VQ_ResNet2D))
     
     @property
     @abstractmethod
@@ -390,7 +387,7 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
 
             batch_indices = np.sort(batch_indices)
             spectrograms = torch.tensor(dataset[batch_indices], dtype=torch.float32)
-            spectrograms = spectrograms.flatten(start_dim=1, end_dim=2) if self.flatten else spectrograms.unsqueeze(1)
+            spectrograms = spectrograms.flatten(start_dim=1, end_dim=2) if self.model.flatten else spectrograms.unsqueeze(1)
 
             yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
 
@@ -405,6 +402,5 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
                 # test_loader=self.train_loader,
                 # test_labels=self.train_labels,
                 model=self.model,
-                loss_criterion=self._loss_criterion,
-                flatten=self.flatten
+                loss_criterion=self._loss_criterion
             )
