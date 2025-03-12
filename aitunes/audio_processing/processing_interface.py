@@ -113,7 +113,7 @@ class AudioProcessingInterface:
         return AudioProcessingInterface(self.get_path(), mode="wave", data=y, sr=self._sr, label=label or (self.get_label() + " (Cropped)"))
 
     def log_spectrogram(self, **kwargs):
-        return librosa.amplitude_to_db(np.abs(librosa.stft(self._y, **kwargs)) ** 2, ref=np.max)
+        return librosa.power_to_db(np.abs(librosa.stft(self._y, **kwargs)) ** 2, ref=np.max)
     
     def mel_spectrogram(self, n_mels=128, **kwargs):
         return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels, **kwargs)

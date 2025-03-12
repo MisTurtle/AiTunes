@@ -492,29 +492,36 @@ class ResidualStackV2(nn.Module):
 
 class ResidualEncoderV2(nn.Module):
     
-    def __init__(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
+    def __init__(self, input_shape, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
         """
         Encoder module for a residual network.
 
         Args:
-            in_channels (_type_): Number of channels the input values have
+            input_shape (tuple[int]): Size of the input (Only channels should be required, but we also need to compute the padding for transpose convolutions...)
             num_hiddens (int): Number of convolution channels to reach within the encoder
             num_downsampling_layers (int): Number of downsampling layers to create in the Encoder. Each layer basically divides the input shape by 2. Min: 2 layers
             num_residual_layers (int): Number of residual connections to create in the Encoder and Decoder ResidualStacks
             num_residual_hiddens (int): Number of convolution channels to compress to in the ResidualStacks
         """
         super().__init__()
-        self._in_channels = in_channels
+        self._in_channels = input_shape[0]
+        self._input_shape = input_shape
         self._num_hiddens = num_hiddens
         self._num_downsampling_layers = num_downsampling_layers
         self._num_residual_layers = num_residual_layers
         self._num_residual_hiddens = num_residual_hiddens
         self._convolution, self._residual_stack = None, None
+        self._shapes = [self._input_shape[1:]]
         self._build_modules()
+
+    @property
+    def shapes(self):
+        return self._shapes
     
     def _build_modules(self):
-        layers = []
+        layers = nn.Sequential()
         in_channels = self._in_channels 
+        dummy = torch.randn(self._input_shape).unsqueeze(0)
         for i in range(self._num_downsampling_layers):
             if i == 0:
                 out_channels = self._num_hiddens // 2
@@ -529,6 +536,7 @@ class ResidualEncoderV2(nn.Module):
                 stride=2,
                 padding=1
             ))
+            self._shapes.append(layers(dummy).shape[2:])
             layers.append(nn.ReLU())
         layers.append(nn.Conv2d(
             in_channels=self._num_hiddens,
@@ -546,21 +554,23 @@ class ResidualEncoderV2(nn.Module):
 
 class ResidualDecoderV2(nn.Module):
 
-    def __init__(self, out_channels, embedding_dim, num_hiddens, num_upsampling_layers, num_residual_layers, num_residual_hiddens, activation_type: Union[None, nn.Module] = None):
+    def __init__(self, output_shape, embedding_dim, num_hiddens, num_upsampling_layers, num_residual_layers, num_residual_hiddens, expected_shapes, activation_type: Union[None, nn.Module] = None):
         """
         Decoder module for a residual network.
 
         Args:
-            out_channels (_type_): Number of channels expected in the output
+            output_shape (tuple[int]): Expected output size. Only channels should be required, but we also need to know which padding to apply.
             embedding_dim (int): Embedding vectors dimension
             num_embeddings (int): Number of discrete embedding vectors
             num_upsampling_layers (int):  Number of upsampling layers to create. Min: 2 layers
             num_residual_layers (int): Number of residual connections to create in the ResidualStack
             num_residual_hiddens (int): Number of convolution channels to compress to in the ResidualStack
+            expected_shapes (tuple[int]): Shapes to match at each step of the decoder through padding
             activation_type (Union[None, nn.Module], optional): Activation function out of the decoder. If None, no activation is applied. Defaults to None. Defaults to None.
         """
         super().__init__()
-        self._out_channels = out_channels
+        self._out_channels = output_shape[0]
+        self._output_shape = output_shape
         self._embedding_dim = embedding_dim
         self._num_hiddens = num_hiddens
         self._num_upsampling_layers = num_upsampling_layers
@@ -568,6 +578,7 @@ class ResidualDecoderV2(nn.Module):
         self._num_residual_hiddens = num_residual_hiddens
         self._activation_type = activation_type
         self._conv_in, self._upconv, self._residual_stack = None, None, None
+        self._expected_shapes = expected_shapes
         self._build_modules()
     
     def _build_modules(self):
@@ -587,12 +598,15 @@ class ResidualDecoderV2(nn.Module):
                 (in_channels, out_channels) = (self._num_hiddens, self._num_hiddens // 2)
             else:
                 (in_channels, out_channels) = (self._num_hiddens // 2, self._out_channels)
+            
+            output_padding = compute_transpose_padding(4, 1, 2, self._expected_shapes[i], self._expected_shapes[i + 1])
             layers.append(nn.ConvTranspose2d(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 kernel_size=4,
                 stride=2,
-                padding=1
+                padding=1,
+                output_padding=output_padding
             ))
             if i != self._num_upsampling_layers - 1:
                 layers.append(nn.ReLU())
@@ -610,6 +624,9 @@ class ResidualDecoderV2(nn.Module):
 #########################
 ### VQ VAE COMPONENTS ###
 #########################
+# Inspired from https://github.com/google-deepmind/sonnet/blob/v2/sonnet/src/nets/vqvae.py
+# combined with https://github.com/airalcorn2/vqvae-pytorch/blob/master/vqvae.py
+# and https://www.youtube.com/watch?v=1ZHzAOutcnw&ab_channel=ExplainingAI
 
 class SonnetEMA(nn.Module):
 
@@ -623,7 +640,7 @@ class SonnetEMA(nn.Module):
         """
         super().__init__()
         self.decay = decay
-        self.counter = 0
+        self.register_buffer('counter', torch.zeros([1], dtype=torch.int64))
         self.register_buffer('hidden', torch.zeros(*shape))
         self.register_buffer('average', torch.zeros(*shape))
     
@@ -640,7 +657,7 @@ class SonnetEMA(nn.Module):
 
 class VectorQuantizer(nn.Module):
 
-    def __init__(self, embedding_dim: int, num_embeddings: int, ema: bool = True, decay: float = 0.99, epsilon: float = 1e-5):
+    def __init__(self, embedding_dim: int, num_embeddings: int, ema: bool = True, random_restart: int = 0, decay: float = 0.99, epsilon: float = 1e-5):
         """
         VectorQuantizer takes an input vector and maps it to the closest in the Embedding Table, performing an Exponential Moving Average iteration if enabled
 
@@ -648,6 +665,7 @@ class VectorQuantizer(nn.Module):
             embedding_dim (int): Embedding vectors dimension
             num_embeddings (int): Number of discrete embedding vectors
             ema (bool, optional): Whether to use Sonnet's Exponential Moving Average to prevent codebook collapse. Defaults to True.
+            random_restart (int, optional): How often to perform a random codebook restart, a strategy to fight against codebook collapse Defaults to 0, means never.
             decay (float, optional): Weight given to past values. Closer to one means a smoother and slower reaction to changes. Defaults to 0.99.
             epsilon (float, optional): Epsilon to prevent numerical instability. Defaults to 1e-5.
         """
@@ -656,52 +674,84 @@ class VectorQuantizer(nn.Module):
         self.num_embeddings = num_embeddings
         self.decay = decay
         self.epsilon = epsilon
+        self.random_restart, self.restart_in = random_restart, random_restart
         self.ema = ema
 
         # Vector Embedding Table
         self.embeddings = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim)
-        self.embeddings.weight.data.uniform_(-1.7, 1.7)
+        self.embeddings.weight.data.uniform_(-1 / num_embeddings, 1 / num_embeddings)  # Make the embeddings close to each other so encoder outputs aren't inherently closer to a few ones
+        self.used_embeddings = torch.zeros(self.embeddings.weight.shape[0])
 
         # EMA var
         self.EMA_cluster_counts = SonnetEMA(decay, (num_embeddings, ))
-        self.EMA_embeddings = SonnetEMA(decay, self.embeddings.weight.shape[::-1])
+        self.EMA_embeddings = SonnetEMA(decay, self.embeddings.weight.T.shape)
 
         # Last loss value (retrieved as properties so it doesn't break torchsummary)
-        self.last_codebook_loss = torch.tensor(0.0, requires_grad=False)
+        self.last_codebook_loss = torch.tensor(0.0, requires_grad=True)
         self.last_commitment_loss = torch.tensor(0.0, requires_grad=True)
-    
-    def forward(self, x, training=False):
-        flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
-        distances = (
-            (flat_x ** 2).sum(1, keepdim=True)  # squared input
-            - 2 * flat_x @ self.embeddings.weight.T  # dot product with embeddings (transpose of weight)
-            + (self.embeddings.weight ** 2).sum(1, keepdim=True).T  # squared embeddings
-        )
-    
-        # Lookup tensors in the embedding lookup table
-        encoding_indices = distances.argmin(1)
-        quantized = self.embeddings(encoding_indices.view(x.shape[0], *x.shape[2:])).permute(0, 3, 1, 2)
+        self.last_perplexity = torch.tensor(0.0, requires_grad=False)
 
-        # First loss component to return
-        self.last_codebook_loss = None if self.ema else torch.mean((quantized - x.detach()) ** 2)  # Quantized vectors should be close to encoder output
-        self.last_commitment_loss = torch.mean((x - quantized.detach()) ** 2)  # Encoder output should be close to quantized vectors
-        quantized = x + (quantized - x).detach()
+    def forward(self, x, training=False):
+        # Reshape the input to isolate the batch size and embedding dimension, getting a list of feature vectors the size of the embedding table
+        flat_x = x.permute(0, 2, 3, 1)
+        flat_x = flat_x.reshape((flat_x.shape[0], -1, flat_x.shape[-1]))
+
+        # Compute distances to each discrete embedding vector 
+        lookup_weights = self.embeddings.weight[None, :].repeat((flat_x.shape[0], 1, 1))
+        distances = torch.cdist(flat_x, lookup_weights)
+
+        # Extract the discrete vectors which are closest to the encoder's output features from the embedding table 
+        encoding_indices = distances.argmin(dim=-1)
+        quantized = torch.index_select(self.embeddings.weight, 0, encoding_indices.view(-1))
+        flat_x = flat_x.reshape((-1, flat_x.shape[-1]))
+        
+        # Compute losses to update the encoder so it matches the embedding vectors more closely
+        self.last_codebook_loss = None if self.ema else torch.mean((quantized - flat_x.detach()) ** 2)  # Quantized vectors should be close to encoder output
+        self.last_commitment_loss = torch.mean((flat_x - quantized.detach()) ** 2)  # Encoder output should be close to quantized vectors
+
+        # Zeros everywhere, except for a 1 at the index of the discrete vector in the embedding table
+        encodings = F.one_hot(encoding_indices.view(-1), num_classes=self.num_embeddings).float()        
 
         if self.ema and training:
+            # Perform Sonnet Exponential Moving Average updates manually
             with torch.no_grad():
-                encodings = F.one_hot(encoding_indices, num_classes=self.num_embeddings).float()  # Zeros everywhere, except for a 1 at the index of the table index
-                # Update cluster count EMA
+                # Compute usage count for each embedding
                 cluster_count = encodings.sum(dim=0)
-                updated_ema_cluster_counts = self.EMA_cluster_counts(cluster_count)
+                updated_ema_cluster_size = self.EMA_cluster_counts(cluster_count)
+                
                 # Update embeddings EMA
-                embed_sums = torch.matmul(flat_x.transpose(0, 1), encodings)
-                updated_ema_dw = self.EMA_embeddings(embed_sums)
+                dw = torch.matmul(flat_x.T, encodings)
+                updated_ema_dw = self.EMA_embeddings(dw)
+                
                 # Update embedding table
-                n = updated_ema_cluster_counts.sum()
-                updated_ema_cluster_counts = ((updated_ema_cluster_counts + self.epsilon) / (n + self.num_embeddings * self.epsilon) * n)
-                normalised_updated_ema_w = updated_ema_dw / updated_ema_cluster_counts.unsqueeze(0)
+                n = updated_ema_cluster_size.sum()
+                updated_ema_cluster_size = ((updated_ema_cluster_size + self.epsilon) / (n + self.num_embeddings * self.epsilon) * n)
+                normalised_updated_ema_w = updated_ema_dw / updated_ema_cluster_size.unsqueeze(0)
                 self.embeddings.weight.copy_(normalised_updated_ema_w.t())
-        
+                
+                # Random codebook restart
+                if self.random_restart > 0:
+                    self.used_embeddings += cluster_count
+                    self.restart_in -= 1
+                    if self.restart_in == 0:
+                        self.restart_in = self.random_restart
+                        threshold = 1.0  # Minimum usage: 1
+                        dead_indices = torch.where(self.used_embeddings < threshold)[0]
+                        if dead_indices.numel() > 0:
+                            # Reset dead entries with samples from the current batch
+                            rand_indices = torch.randint(0, flat_x.size(0), (dead_indices.shape[0], ))
+                            new_entries = flat_x[rand_indices]
+                            self.embeddings.weight[dead_indices] = new_entries
+                        self.used_embeddings = torch.zero_(self.used_embeddings)
+    
+        # Straight Through Estimation (To keep gradient flow going even with the undifferentiable table lookup)
+        quantized = flat_x + (quantized - flat_x).detach()
+        quantized = quantized.reshape(x.shape)
+
+        # Perplexity computation (codebook usage)
+        avg_probs = torch.mean(encodings, 0)
+        self.last_perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+
         return quantized
 
 class VQ_ResNet2D(AiTunesAutoencoderModule):
@@ -717,6 +767,7 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
             num_embeddings,
             decoder_activation: Union[None, nn.Module] = None,
             use_ema: bool = True,
+            random_restart: int = 0,
             decay: float = 0.99,
             epsilon: float = 1e-5
     ):
@@ -735,28 +786,29 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
             num_embeddings (int): Number of discrete embedding vectors
             decoder_activation (Union[None, nn.Module], optional): Activation function out of the decoder. If None, no activation is applied. Defaults to None.
             use_ema (bool, optional): Whether to use Sonnet's Exponential Moving Average to prevent codebook collapse. Defaults to True.
+            random_restart (int, optional): How often to perform a random codebook restart, a strategy to fight against codebook collapse Defaults to 0, means never.
             decay (float, optional): Weight given to past values. Closer to one means a smoother and slower reaction to changes. Defaults to 0.99.
             epsilon (float, optional): Epsilon to prevent numerical instability. Defaults to 1e-5.
         """
         super().__init__(input_shape=input_shape, flatten=False)
 
-        self._encoder = ResidualEncoderV2(input_shape[0], num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens)
+        self._encoder = ResidualEncoderV2(input_shape, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens)
         self._pre_vq_conv = nn.Conv2d(num_hiddens, embedding_dim, kernel_size=1)
-        self._vq = VectorQuantizer(embedding_dim, num_embeddings, use_ema, decay, epsilon)
-        self._decoder = ResidualDecoderV2(input_shape[0], embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens, decoder_activation)
+        self._vq = VectorQuantizer(embedding_dim, num_embeddings, use_ema, random_restart, decay, epsilon)
+        self._decoder = ResidualDecoderV2(input_shape, embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens, self._encoder.shapes[::-1], decoder_activation)
 
     def encode(self, x):
         return self._pre_vq_conv(self._encoder(x))
     
     def quantize(self, x, training):
         quantized = self._vq(x, training)
-        return quantized, self._vq.last_codebook_loss, self._vq.last_commitment_loss
+        return quantized, self._vq.last_codebook_loss, self._vq.last_commitment_loss, self._vq.last_perplexity
     
     def decode(self, z):
         return self._decoder(z)
     
     def forward(self, x, training=False):
         x = self.encode(x)
-        quantized, codebook_loss, commitment_loss = self.quantize(x, training)
+        quantized, codebook_loss, commitment_loss, perplexity = self.quantize(x, training)
         recon = self.decode(quantized)
-        return quantized, recon, codebook_loss, commitment_loss
+        return quantized, recon, codebook_loss, commitment_loss, perplexity

@@ -181,7 +181,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             latent_sample, rec_spec, *args = model(model_input, training=False)
             loss, *_ = loss_criterion(model_input, rec_spec, *args)
             og_interface = reconstruct_audio(original_spectrogram, features, label=original_label)
-            latent_size = int(latent_sample.shape[1])
+            latent_size = latent_sample.shape[1:]
             latent_sample = latent_sample[0]
         rec_interface = reconstruct_audio(rec_spec, features, label="Generated Track")
         
@@ -237,7 +237,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             rec_interface.get_plot_for(['log_mel'], title="Reconstructed Log Mel Spectrogram", axes=axes[2], fig=fig, colorbar=colorbar)
         
         axes[3].title.set_text("Latent Space Representation")
-        axes[3].bar(np.arange(0, latent_size), latent_sample.cpu().tolist())
+        # axes[3].bar(np.arange(0, latent_size), latent_sample.cpu().tolist())
 
 
     # Create buttons (from left to right)

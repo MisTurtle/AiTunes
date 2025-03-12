@@ -59,6 +59,14 @@ def generate_ascending_sine_wave(to: str, sample_rate: int = 44100, duration: fl
         sample_rate, sine_wave_pcm
     )
 
+def generate_bouncing_wave(to: str, sample_rate: int = 44100, duration: float = 5, hz_min: float = 10, hz_max: float = 500, period: float = 1, amp: float = 0.5):
+    timepoints = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    freq_modulation = hz_min + (hz_max - hz_min) * 0.5 * (1 + np.sin(2 * np.pi * timepoints / period))
+    phase = 2 * np.pi * np.cumsum(freq_modulation) / sample_rate
+    sine_wave = amp * np.sin(phase)
+    sine_wave_pcm = np.int16(sine_wave * 32767)
+    filename = os.path.join(to, f"sine_bounce_wave_{int(hz_min)}-{int(hz_max)}_{int(period)}s.wav")
+    write(filename, sample_rate, sine_wave_pcm)
 
 def generate_instrument_sound(to: str, sample_rate=44100, duration=3.0, frequency=261.63):
     t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
@@ -95,5 +103,7 @@ def generate_dataset_of_simple_instruments(to: str, sample_rate: int = 22050, un
         generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=[r(), r()])
     for _ in range(unit_per_type):
         generate_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz=[r(), r(), r()])
+    for _ in range(unit_per_type):
+        generate_bouncing_wave(to, sample_rate=sample_rate, duration=unit_duration, hz_min=r(), hz_max=r(), period=random.random() * unit_duration / 2)
     for _ in range(unit_per_type):
         generate_ascending_sine_wave(to, sample_rate=sample_rate, duration=unit_duration, hz_min=r(), hz_max=r())

@@ -91,3 +91,21 @@ class MnistReconstructionScenarios(ScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
+
+    @scenario(name="VQVAE", version="hello_world", description="A test of the VQ VAE infrastructure on the easy case of MNIST digits reconstruction.")
+    def vqvae_hello_world(self):
+        model = VQ_ResNet2D(
+            input_shape=(1, 28, 28),
+            num_hiddens=64,
+            num_downsampling_layers=3,
+            num_residual_layers=3,
+            num_residual_hiddens=32,
+            embedding_dim=2,
+            num_embeddings=3
+        )
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer

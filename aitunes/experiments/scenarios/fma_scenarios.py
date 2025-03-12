@@ -55,10 +55,10 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
         self.mode = 1
         model = CVAE(
             input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[ 32, 64, 128, 256, 512, 1024],
+            conv_channels=[ 32, 64, 128, 256, 512, 1024],
             conv_kernels=[  3,  3,   3,   3,   3,    3],
             conv_strides=[  (1, 2),  (1, 2),   (1, 2),   2,   2,    2],
-            latent_space_dim=64
+            latent_dimension=64
         )
         loss, optimizer = lambda *args: simple_mse_kl_loss(*args, beta=1), optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer

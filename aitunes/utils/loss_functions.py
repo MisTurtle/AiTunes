@@ -83,10 +83,10 @@ def create_cherry_picked_loss(indices: tuple[int], weights: tuple[float]):
     """
     def _loss(prediction, target, *args):
         loss = torch.tensor(0.0, requires_grad=True)
-        for index in indices:
+        for weight_i, index in enumerate(indices):
             if args[index] is None:
                 continue
-            loss = loss + args[index] * weights[index]
+            loss = loss + args[index] * weights[weight_i]
         return loss, 
     return _loss
 

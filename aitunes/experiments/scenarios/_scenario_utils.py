@@ -167,7 +167,7 @@ class AudioBasedScenarioContainer(ScenarioContainer):
 
     @property
     def batch_size(self) -> int:
-        return 16
+        return 32
     
     @property
     def eval_proportions(self) -> float:

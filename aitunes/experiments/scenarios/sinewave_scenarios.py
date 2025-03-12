@@ -45,7 +45,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
 
     @property
     def all_modes(self):
-        return HighResolutionAudioFeatures(5.0), LowResolutionAudioFeatures(5.0)
+        return HighResolutionAudioFeatures(10.0), LowResolutionAudioFeatures(10.0)
 
     @property
     def dataset_info(self):
@@ -54,19 +54,19 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     def _create_audios(self):
         generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=5.0, unit_per_type=500)
         
-    @scenario(name="CVAE", version="low-dim2", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 2")
+    @scenario(name="CVAE", version="low-dim8", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 8")
     def cvae_low2(self):
         self.mode = 1
         model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128,  256,  256],
-            conv_kernels=[   3,    3,    3,    3,    1],
-            conv_strides=[   2,    2,    2,    2,    1],
-            latent_space_dim=2
+            input_shape=(1, *self.mode.spectrogram_size),
+            conv_channels=(  32,   64,  128,  256,  256),
+            conv_kernels=(   3,    3,     3,    3,    1),
+            conv_strides=(   2,    2,     2,    2,    1),
+            latent_dimension=8
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.001)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -75,15 +75,15 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     def cvae_low16(self):
         self.mode = 1
         model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128,  256,  256],
-            conv_kernels=[   3,    3,    3,    3,    1],
-            conv_strides=[   2,    2,    2,    2,    1],
-            latent_space_dim=16
+            input_shape=(1, *self.mode.spectrogram_size),
+            conv_channels=(  32,   64,  128,  256,  256),
+            conv_kernels=(   3,    3,     3,    3,    1),
+            conv_strides=(   2,    2,     2,    2,    1),
+            latent_dimension=16
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.000125)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -92,15 +92,15 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     def cvae_low32(self):
         self.mode = 1
         model = CVAE(
-            input_shape=[1, *self.mode.spectrogram_size],
-            conv_filters=[  32,   64,  128,  256,  256],
-            conv_kernels=[   3,    3,    3,    3,    1],
-            conv_strides=[   2,    2,    2,    2,    1],
-            latent_space_dim=32
+            input_shape=(1, *self.mode.spectrogram_size),
+            conv_channels=(  32,   64,  128,  256,  256),
+            conv_kernels=(   3,    3,     3,    3,    1),
+            conv_strides=(   2,    2,     2,    2,    1),
+            latent_dimension=32
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00003125)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -112,19 +112,28 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00003125)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
     
-    @scenario(name="VQ-ResNet2D", version="low-dim32", description="An attempt at implementign a simple VQ-VAE model (using the ResNet2D convolutional architecture). Latent Dim: 32")
+    @scenario(name="VQ-ResNet2D", version="low-dim32", description="An attempt at implementing a VQ-VAE model (using the ResNet2D convolutional architecture) for audio data. Latent Dim: 32")
     def vq_resnet_low32(self):
         self.mode = 1
-        model = VQ_ResNet2D((1, *self.mode.spectrogram_size), 4, 16, 32, 8192)
+        model = VQ_ResNet2D(
+            (1, *self.mode.spectrogram_size),
+            num_hiddens=64,
+            num_downsampling_layers=5,
+            num_residual_layers=2,
+            num_residual_hiddens=32,
+            embedding_dim=32,
+            num_embeddings=1024,
+            random_restart=16
+        )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
             (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
 
