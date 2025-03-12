@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- Make sure preprocessed spectrograms are provided beforehand so compute nodes don't have to do it themselves in parallel
+# -- Script to submit jobs through slurm (outdated, since gpu nodes aren't linked to slurm)
 
 #SBATCH --job-name=AiTunes
 #SBATCH --output=AiTunes_J%A_t%a.out

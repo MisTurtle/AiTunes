@@ -20,7 +20,7 @@ class Cifar10ReconstructionScenarios(ScenarioContainer):
 
     @property
     def identifier(self):
-        return "CIFAR 10"
+        return "CIFAR10"
 
     @property
     def description(self):
@@ -131,7 +131,7 @@ class Cifar10ReconstructionScenarios(ScenarioContainer):
             num_downsampling_layers=4,
             num_residual_layers=5,
             num_residual_hiddens=64,
-            embedding_dim=16,
+            embedding_dim=32,
             num_embeddings=2048,
             use_ema=True,
             random_restart=16

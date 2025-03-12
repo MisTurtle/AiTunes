@@ -1,24 +1,11 @@
 from aitunes.user_controls.headless import HeadlessActionPipeline
 
 actions = HeadlessActionPipeline()
-
-actions.select_experiment('CIFAR 10')
-for s in actions.list_scenarios():
-    print('Running for %s' % s)
-    actions.select_scenario(s)
-    actions.train(200, 20, False)
-
-actions.select_experiment('SINEWAVE')
-for s in actions.list_scenarios():
-    print('Running for %s' % s)
-    actions.select_scenario(s)
-    actions.train(200, 20, False)
-    
 actions.select_experiment('GTZAN')
-for s in actions.list_scenarios():
-    print('Running for %s' % s)
-    actions.select_scenario(s)
-    actions.train(200, 20, False)
+actions.select_scenario(actions.list_scenarios())
+actions.train(2, 0, False)
+actions.select_release_model()
+actions.interactive_evaluation()
 
 
 # TODO : Add docstring kind of everywhere if it's important

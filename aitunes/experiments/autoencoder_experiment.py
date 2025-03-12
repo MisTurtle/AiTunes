@@ -349,7 +349,7 @@ class AutoencoderExperimentSupport:
     
 
 class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
-
+    # TODO : Move this to Experiments/Cases, it has nothing to do here
     def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int):
         super().__init__(name, model, weights_path, loss_criterion, optimizer)
 

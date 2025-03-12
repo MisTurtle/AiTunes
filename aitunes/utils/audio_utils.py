@@ -152,7 +152,6 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
     plt.switch_backend("TkAgg")
 
     # State tracker
-    latent_size: int = 0
     current_track: int = 0
     generated_from_scratch: bool = False
     original_spectrogram: Union[np.ndarray] = None
@@ -166,10 +165,10 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         """
         Takes the current track, generates a model prediction and creates audio interfaces for it
         """
-        nonlocal original_spectrogram, original_label, latent_sample, og_interface, rec_interface, loss, latent_size
+        nonlocal model, original_spectrogram, original_label, latent_sample, og_interface, rec_interface, loss
 
         if generated_from_scratch:
-            rec_spec = model.decode(latent_sample.unsqueeze(0))
+            rec_spec = model.decode(latent_sample)
             original_spectrogram = original_label = og_interface = None
         else:
             original_spectrogram = test_loader[current_track]
@@ -181,8 +180,6 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             latent_sample, rec_spec, *args = model(model_input, training=False)
             loss, *_ = loss_criterion(model_input, rec_spec, *args)
             og_interface = reconstruct_audio(original_spectrogram, features, label=original_label)
-            latent_size = latent_sample.shape[1:]
-            latent_sample = latent_sample[0]
         rec_interface = reconstruct_audio(rec_spec, features, label="Generated Track")
         
     # Create a new figure
@@ -216,7 +213,7 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         nonlocal generated_from_scratch, latent_sample, bplayog
         bplayog.set_active(False)
         generated_from_scratch = True
-        latent_sample = torch.randn(latent_size)
+        latent_sample = torch.randn((1, *model.latent_shape))
         display_track()
 
     def display_track(colorbar: bool = False):
@@ -237,8 +234,11 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             rec_interface.get_plot_for(['log_mel'], title="Reconstructed Log Mel Spectrogram", axes=axes[2], fig=fig, colorbar=colorbar)
         
         axes[3].title.set_text("Latent Space Representation")
-        # axes[3].bar(np.arange(0, latent_size), latent_sample.cpu().tolist())
-
+        if len(latent_sample.shape) == 2:  # [Batch, Latent Values]
+            axes[3].bar(np.arange(0, latent_sample.shape[1]), latent_sample[0].cpu().tolist())
+        elif len(latent_sample.shape) == 4:  # [Batch, ]
+            print(latent_sample.shape)
+            print(len(latent_sample.shape))
 
     # Create buttons (from left to right)
     axgenerate  = fig.add_axes([0.10, 0.025, 0.08, 0.03])

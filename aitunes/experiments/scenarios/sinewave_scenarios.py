@@ -51,8 +51,12 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     def dataset_info(self):
         return None
     
+    @property
+    def duration(self) -> float:
+        return 10.0
+    
     def _create_audios(self):
-        generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=5.0, unit_per_type=500)
+        generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=self.duration, unit_per_type=500)
         
     @scenario(name="CVAE", version="low-dim8", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 8")
     def cvae_low2(self):

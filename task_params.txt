@@ -1,1 +1,14 @@
---headless -Q -E VectorAugmentation -S simple_ae_v1.0 -M assets/Models/linear_augmentation/simple_ae_v1.0.pth -e 200 -s 50
+# Linear Task
+# --headless -Q -E "5D VECTORS" -S ae_hello_world -e 200 -s 50
+# --headless -Q -E "5D VECTORS" -S ae_deep_world -e 200 -s 50
+# --headless -Q -E "5D VECTORS" -S vae_hello_kl -e 200 -s 50
+# --headless -Q -E "5D VECTORS" -S vae_small_kl -e 200 -s 50
+
+# CIFAR 10
+--headless -Q -E CIFAR10 -S "vq-resnet2d_hello_world" -e 100 -s 10
+--headless -Q -E CIFAR10 -S cvae_dim16 -e 100 -s 10
+--headless -Q -E CIFAR10 -S cvae_dim32 -e 100 -s 10
+--headless -Q -E CIFAR10 -S cvae_dim64 -e 100 -s 10
+--headless -Q -E CIFAR10 -S cvae_dim128 -e 100 -s 10
+--headless -Q -E CIFAR10 -S cvae_ssim128 -e 100 -s 10
+--headless -Q -E CIFAR10 -S resnet2d_hello_world -e 100 -s 10

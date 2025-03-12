@@ -66,12 +66,13 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
     :param standalone_zipped_dir: Name of the dir if the root of the zip file only contains one folder, take the contents of that folder and move it upwards one rank
     :param clean: Temporary zip file gets deleted if True
     """
-    if path.exists(target_path):
+    if path.exists(target_path) and len(listdir(target_path)) > 0:
         print(f"Skipped download for {url}: Items exist at path {target_path}")
         return
-
+    
     if zip_path is None:
         zip_path = path.join(target_path, "..", random.choices(string.ascii_letters, 9) + ".zip")
+        makedirs(path.dirname(zip_path), exist_ok=True)
     
     print(f"Downloading from {url} to {zip_path}")
     response = requests.get(url, stream=True)
@@ -82,7 +83,7 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
     dl_size = 0
     dl_suffix = lambda x: "" if final_size is None else f" / {final_size:.2f} MB ({100 * x / final_size:.2f}%)"
     try:
-        with open(zip_path, "wb") as file:
+        with open(path.abspath(zip_path), "wb") as file:
             for chunk in response.iter_content(chunk_size=4096):
                 if chunk:
                     dl_size += len(chunk) / one_mb
@@ -104,7 +105,7 @@ def download_and_extract(url: str, target_path: str, zip_path: Union[str, None] 
 
         print(f"Successfully extracted to {target_path}")
     finally:
-        if clean:
+        if clean and path.exists(zip_path):
             remove(zip_path)
 
 def save_dataset(path_to: str, datasets: dict, attrs: dict = {}):
