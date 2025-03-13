@@ -45,6 +45,19 @@ class AiTunesAutoencoderModule(nn.Module, ABC):
         pass
 
     @abstractmethod
+    def sample(self, n: int) -> torch.Tensor:
+        """
+        Sample a batch of n tensors from the latent. These latent samples are not decoded.
+
+        Args:
+            n (int): Batch size
+
+        Returns:
+            torch.Tensor: A batch of tensors sampled from the latent distribution
+        """
+        pass
+
+    @abstractmethod
     def decode(self, z):
         pass
 
@@ -118,15 +131,18 @@ class VanillaAutoEncoder(AiTunesAutoencoderModule):
             decoder_activation (ActivationType, optional): Activation function to apply to the decoder output. Defaults to None.
         """
         super().__init__((input_shape, ), True)
-        dimensions = [input_shape] + list(hidden_layer_dimensions) + [latent_dimension]
-        self._encoder = VanillaEncoder(dimensions=dimensions)
-        self._decoder = VanillaDecoder(dimensions=dimensions[::-1], activation_type=decoder_activation)
+        self.dimensions = [input_shape] + list(hidden_layer_dimensions) + [latent_dimension]
+        self._encoder = VanillaEncoder(dimensions=self.dimensions)
+        self._decoder = VanillaDecoder(dimensions=self.dimensions[::-1], activation_type=decoder_activation)
 
     def encode(self, x):
         return self._encoder(x)
 
     def decode(self, z):
         return self._decoder(z)
+    
+    def sample(self, n):
+        return torch.randn((n, self.dimensions[-1]))
     
     def forward(self, x, training=False):
         z = self.encode(x)
@@ -147,11 +163,11 @@ class VariationalAutoEncoder(AiTunesAutoencoderModule):
 
     def __init__(self, input_shape: int, hidden_layers_dimensions: Sequence[int], latent_dimension: int, decoder_activation: ActivationType = None):
         super().__init__((input_shape, ), True)
-        dimensions = [input_shape] + list(hidden_layers_dimensions) + [latent_dimension]
-        self._encoder = VanillaEncoder(dimensions=dimensions[:-1])  # Encode up to before the latent dimension
-        self._decoder = VanillaDecoder(dimensions=dimensions[::-1], activation_type=decoder_activation)  # Decode from the latent dimension
-        self._mu = nn.Linear(dimensions[-2], dimensions[-1])
-        self._log_var = nn.Linear(dimensions[-2], dimensions[-1])
+        self.dimensions = [input_shape] + list(hidden_layers_dimensions) + [latent_dimension]
+        self._encoder = VanillaEncoder(dimensions=self.dimensions[:-1])  # Encode up to before the latent dimension
+        self._decoder = VanillaDecoder(dimensions=self.dimensions[::-1], activation_type=decoder_activation)  # Decode from the latent dimension
+        self._mu = nn.Linear(self.dimensions[-2], self.dimensions[-1])
+        self._log_var = nn.Linear(self.dimensions[-2], self.dimensions[-1])
     
     def encode(self, x):
         x = self._encoder(x)
@@ -161,6 +177,9 @@ class VariationalAutoEncoder(AiTunesAutoencoderModule):
 
     def decode(self, z):
         return self._decoder(z)
+    
+    def sample(self, n):
+        return torch.randn((n, self.dimensions[-1]))
 
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)
@@ -314,6 +333,9 @@ class CVAE(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
+    def sample(self, n):
+        return torch.randn((n, self._latent_dimension))
+    
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)
         z = reparameterize(mu, log_var)
@@ -431,6 +453,9 @@ class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE 
     
     def decode(self, z):
         return self._decoder(z)
+    
+    def sample(self, n):
+        return torch.randn((n, self._latent_space_dim))
     
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)
@@ -691,27 +716,32 @@ class VectorQuantizer(nn.Module):
         self.last_commitment_loss = torch.tensor(0.0, requires_grad=True)
         self.last_perplexity = torch.tensor(0.0, requires_grad=False)
 
+    def sample(self, n, target_shape):
+        indices = torch.randint(0, self.num_embeddings, (n, np.prod(target_shape)))
+        quantized = torch.index_select(self.embeddings.weight, 0, indices.view(-1))  # Batch Size x Height x Width, Embedding dim 
+        return quantized.reshape((n, self.embedding_dim, *target_shape))
+
     def forward(self, x, training=False):
         # Reshape the input to isolate the batch size and embedding dimension, getting a list of feature vectors the size of the embedding table
-        flat_x = x.permute(0, 2, 3, 1)
-        flat_x = flat_x.reshape((flat_x.shape[0], -1, flat_x.shape[-1]))
-
+        flat_x = x.permute(0, 2, 3, 1)  # Batch Size, Height, Width, Embedding dim
+        flat_x = flat_x.reshape((flat_x.shape[0], -1, flat_x.shape[-1]))  # Batch Size, Height x Width, Embedding dimension 
+        
         # Compute distances to each discrete embedding vector 
         lookup_weights = self.embeddings.weight[None, :].repeat((flat_x.shape[0], 1, 1))
-        distances = torch.cdist(flat_x, lookup_weights)
-
+        distances = torch.cdist(flat_x, lookup_weights)  # Batch Size, Height x Width, # of discrete vectors  (=> 1 distance per latent "pixel")
+        
         # Extract the discrete vectors which are closest to the encoder's output features from the embedding table 
-        encoding_indices = distances.argmin(dim=-1)
-        quantized = torch.index_select(self.embeddings.weight, 0, encoding_indices.view(-1))
-        flat_x = flat_x.reshape((-1, flat_x.shape[-1]))
+        encoding_indices = distances.argmin(dim=-1)  # Batch Size, Height x Width  (Index to the closest embedding vector for each latent "pixel")
+        quantized = torch.index_select(self.embeddings.weight, 0, encoding_indices.view(-1))  # Batch Size x Height x Width, Embedding dim 
+        flat_x = flat_x.reshape((-1, flat_x.shape[-1]))  # Batch Size x Height x Width, Embedding dim
         
         # Compute losses to update the encoder so it matches the embedding vectors more closely
         self.last_codebook_loss = None if self.ema else torch.mean((quantized - flat_x.detach()) ** 2)  # Quantized vectors should be close to encoder output
         self.last_commitment_loss = torch.mean((flat_x - quantized.detach()) ** 2)  # Encoder output should be close to quantized vectors
 
         # Zeros everywhere, except for a 1 at the index of the discrete vector in the embedding table
-        encodings = F.one_hot(encoding_indices.view(-1), num_classes=self.num_embeddings).float()        
-
+        encodings = F.one_hot(encoding_indices.view(-1), num_classes=self.num_embeddings).float()  # Batch Size x Height x Width, # of discrete vectors
+        
         if self.ema and training:
             # Perform Sonnet Exponential Moving Average updates manually
             with torch.no_grad():
@@ -746,8 +776,8 @@ class VectorQuantizer(nn.Module):
     
         # Straight Through Estimation (To keep gradient flow going even with the undifferentiable table lookup)
         quantized = flat_x + (quantized - flat_x).detach()
-        quantized = quantized.reshape(x.shape)
-
+        quantized = quantized.reshape(x.shape)  # Batch Size, Channels, Height, Width
+        
         # Perplexity computation (codebook usage)
         avg_probs = torch.mean(encodings, 0)
         self.last_perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
@@ -806,6 +836,9 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
     
     def decode(self, z):
         return self._decoder(z)
+    
+    def sample(self, n):
+        return self._vq.sample(n, self._encoder.shapes[-1])
     
     def forward(self, x, training=False):
         x = self.encode(x)

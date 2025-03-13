@@ -59,7 +59,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=self.duration, unit_per_type=500)
         
     @scenario(name="CVAE", version="low-dim8", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 8")
-    def cvae_low2(self):
+    def cvae_low8(self):
         self.mode = 1
         model = CVAE(
             input_shape=(1, *self.mode.spectrogram_size),
@@ -70,7 +70,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -87,7 +87,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -104,7 +104,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -116,7 +116,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.0001)
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
@@ -127,17 +127,17 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         model = VQ_ResNet2D(
             (1, *self.mode.spectrogram_size),
             num_hiddens=64,
-            num_downsampling_layers=5,
+            num_downsampling_layers=2,
             num_residual_layers=2,
             num_residual_hiddens=32,
             embedding_dim=32,
             num_embeddings=1024,
-            random_restart=16
+            random_restart=32
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
             (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
 

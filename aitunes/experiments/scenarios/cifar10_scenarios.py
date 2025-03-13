@@ -142,3 +142,24 @@ class Cifar10ReconstructionScenarios(ScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer
+        
+    @scenario(name="VQ-ResNet2D", version="better_world", description="An attempt at implementing a simple VQ-VAE model (using a better ResNet2D convolutional architecture). Latent Dim: 32, Discrete Vectors: 2048")
+    def vq_resnet_better_world(self):
+        self.mode = 1
+        model = VQ_ResNet2D(
+            input_shape=(3, 32, 32),
+            num_hiddens=128,
+            num_downsampling_layers=2,
+            num_residual_layers=3,
+            num_residual_hiddens=64,
+            embedding_dim=32,
+            num_embeddings=2048,
+            use_ema=True,
+            random_restart=16
+        )
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),  # Reconstruction loss
+            (create_cherry_picked_loss((0, 1), (1, 0.25)), 1),  # Codebook loss
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        return model, loss, optimizer

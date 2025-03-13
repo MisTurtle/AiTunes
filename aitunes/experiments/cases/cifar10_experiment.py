@@ -116,7 +116,7 @@ class Cifar10Experiment(AutoencoderExperiment):
             def generate(_):
                 nonlocal latent_sample, show_generated
                 show_generated = True
-                latent_sample = torch.randn_like(latent_sample)
+                latent_sample = self.model.sample(2)
                 show()
 
             ax_prev = plt.axes([0.24, 0.05, 0.1, 0.075])

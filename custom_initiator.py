@@ -1,9 +1,9 @@
 from aitunes.user_controls.headless import HeadlessActionPipeline
 
 actions = HeadlessActionPipeline()
-actions.select_experiment('GTZAN')
-actions.select_scenario(actions.list_scenarios())
-actions.train(2, 0, False)
+actions.select_experiment('SINEWAVE')
+actions.select_scenario(actions.list_scenarios()[-1])
+# actions.train(2, 0, False)
 actions.select_release_model()
 actions.interactive_evaluation()
 

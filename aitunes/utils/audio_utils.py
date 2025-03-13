@@ -148,8 +148,21 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
     
     Loops over validation data and show a comparison between the original audio and the reproduced one
     Controls for playing audio and switching tracks is also available
+    
+    Sorry if the function is hard to read ^_^ (collapse inner methods)
     """
     plt.switch_backend("TkAgg")
+
+    # Create a new figure
+    fig = plt.figure(figsize=(14, 8.5))
+    gs = GridSpec(nrows=3, ncols=2, width_ratios=[1, 1], height_ratios=[1, 1, 1])
+    axes = [
+        fig.add_subplot(gs[0, :]),  # Wave form plot
+        fig.add_subplot(gs[1, 0]),  # Original spectrogram
+        fig.add_subplot(gs[1, 1]),  # Reconstructed spectrogram
+        fig.add_subplot(gs[2, :])   # Latent space bar plot
+    ]
+    fig.subplots_adjust(bottom=0.09, top=0.925)
 
     # State tracker
     current_track: int = 0
@@ -163,7 +176,8 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
 
     def update_state():
         """
-        Takes the current track, generates a model prediction and creates audio interfaces for it
+        Takes the current track, generates a model prediction and creates audio interfaces for both the original and generated data
+        If the state indicates to be generated from scratch, simply create an audio interface for the generated data
         """
         nonlocal model, original_spectrogram, original_label, latent_sample, og_interface, rec_interface, loss
 
@@ -181,17 +195,6 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             loss, *_ = loss_criterion(model_input, rec_spec, *args)
             og_interface = reconstruct_audio(original_spectrogram, features, label=original_label)
         rec_interface = reconstruct_audio(rec_spec, features, label="Generated Track")
-        
-    # Create a new figure
-    fig = plt.figure(figsize=(14, 8.5))
-    gs = GridSpec(nrows=3, ncols=2, width_ratios=[1, 1], height_ratios=[1, 1, 1])
-    axes = [
-        fig.add_subplot(gs[0, :]),  # Wave form plot
-        fig.add_subplot(gs[1, 0]),  # Original spectrogram
-        fig.add_subplot(gs[1, 1]),  # Reconstructed spectrogram
-        fig.add_subplot(gs[2, :])   # Latent space bar plot
-    ]
-    fig.subplots_adjust(bottom=0.09, top=0.925)
 
     # Button callbacks
     def next_track(incr: int):
@@ -213,10 +216,16 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
         nonlocal generated_from_scratch, latent_sample, bplayog
         bplayog.set_active(False)
         generated_from_scratch = True
-        latent_sample = torch.randn((1, *model.latent_shape))
+        latent_sample = model.sample(1)
         display_track()
 
     def display_track(colorbar: bool = False):
+        """
+        Display track data on the interface
+
+        Args:
+            colorbar (bool, optional): Add colorbar to spectrogram displays (only True on the first call, or they'll stack horizontally). Defaults to False.
+        """
         update_state()
         for ax in axes:
             ax.clear()
@@ -233,12 +242,12 @@ def audio_model_interactive_evaluation(features: AudioFeatures, test_loader: Dat
             og_interface.get_plot_for(['log_mel'], title="Original Log Mel Spectrogram", axes=axes[1], fig=fig, colorbar=colorbar)
             rec_interface.get_plot_for(['log_mel'], title="Reconstructed Log Mel Spectrogram", axes=axes[2], fig=fig, colorbar=colorbar)
         
-        axes[3].title.set_text("Latent Space Representation")
-        if len(latent_sample.shape) == 2:  # [Batch, Latent Values]
-            axes[3].bar(np.arange(0, latent_sample.shape[1]), latent_sample[0].cpu().tolist())
-        elif len(latent_sample.shape) == 4:  # [Batch, ]
-            print(latent_sample.shape)
-            print(len(latent_sample.shape))
+        latent_flat_size = np.prod([*latent_sample.shape])
+        axes[3].title.set_text("Latent Space Representation")        
+        axes[3].bar(np.arange(0, latent_flat_size), latent_sample.flatten().cpu().tolist())
+        if len(latent_sample.shape) > 2:
+            for x in np.arange(0, latent_flat_size, latent_sample.shape[1]):
+                axes[3].axvline(x - 0.5, color='r')  # Add a separator for each latent vector
 
     # Create buttons (from left to right)
     axgenerate  = fig.add_axes([0.10, 0.025, 0.08, 0.03])
