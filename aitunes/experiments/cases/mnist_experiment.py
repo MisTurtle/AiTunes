@@ -39,7 +39,7 @@ class MnistExperiment(AutoencoderExperiment):
     def batch_per_epoch(self) -> int:
         return int(math.ceil(len(self.train_loader) / self.batch_size))
 
-    def next_batch(self, training):
+    def next_batch(self, training, lookup_labels: bool = False):
         dataset = self.train_loader if training else self.test_loader
         
         for data, labels in dataset:  # Might use labels later

@@ -80,10 +80,16 @@ class AutoencoderExperiment(ABC):
             mw(original_batch, predicted_batch, embedded_batch, batch_extra, model_extra)
 
     @abstractmethod
-    def next_batch(self, training):
+    def next_batch(self, training, lookup_labels: bool = False):
         """
         Generator yielding batches of data to be trained or evaluated on
-        It should yield as many batches necessary to complete a full epoch as a tuple (data, extra data like a label)
+
+        Args:
+            training (bool): Which dataset to use
+            lookup_labels (bool, optional): Lookup correct labels, maybe slowing down the process. Defaults to False.
+
+        Yields:
+            torch.Tensor: as many batches as necessary to complete a full epoch as a tuple (data, extra data like a label)
         """
         yield None, None
 
@@ -126,6 +132,23 @@ class AutoencoderExperiment(ABC):
             self.save_when(lambda *_: False, root_folder)
         else:
             self.save_when(lambda epoch, _: epoch % epoch_count == 0, root_folder)
+    
+    def display_umap_projection(self, on_training: bool = True):
+        mu, labels = [], []
+        with torch.no_grad():
+            for batch, *extra in self.next_batch(on_training, lookup_labels=True):
+                embedding, prediction, *args = self.model(batch, training=False)
+                if len(extra) > 0 and len(args) > 0:  # First check a label is indeed given by the next_batch function
+                    batch_labels = extra[0]
+                    mu.append(embedding.cpu().numpy())  # Args[0] is mu
+                    if isinstance(batch_labels, torch.Tensor):
+                        batch_labels = batch_labels.cpu().numpy()
+                    labels.append(batch_labels)
+            if len(mu) > 0:
+                mu = np.concatenate(mu, axis=0)
+                labels = np.concatenate(labels, axis=0)
+                print(f"[{self._support._name}] Computing UMAP Projection...")
+                plot_umap(mu, labels)
 
     def train(self, epochs: int):
         self._model.train(True)
@@ -133,7 +156,7 @@ class AutoencoderExperiment(ABC):
         self._support.log(f"A training session of {epochs} epochs is about to start...")
 
         for _ in range(epochs):
-            for batch, *extra in self.next_batch(training=True):
+            for batch, *extra in self.next_batch(training=True, lookup_labels=False):
                 self._optimizer.zero_grad()
                 # Predict with the current model state and compute the loss
                 embedding, prediction, *args = self._model(batch, training=True)
@@ -154,31 +177,14 @@ class AutoencoderExperiment(ABC):
         self._support.log("An evaluation session of the model is about to start...")
         self._support.blank_epoch()
         self._model.eval()
-        latents, labels = [], []
         
         with torch.no_grad():            
-            for batch, *extra in self.next_batch(training=False):
+            for batch, *extra in self.next_batch(training=False, lookup_labels=False):
                 embedding, prediction, *args = self._model(batch, training=False)
                 batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
-                # Fill in latents and labels for UMAP projection
-                if len(extra) > 0 and len(args) > 0:  # First check a label is indeed given by the next_batch function
-                    batch_labels = extra[0]
-                    latents.append(args[0].cpu().numpy())  # Args[0] is mu
-                    if isinstance(batch_labels, torch.Tensor):
-                        labels.append(batch_labels.cpu().numpy())
-                    else:
-                        labels.append(batch_labels)
-                # Add batch result
                 self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)
             self._support.log_running_loss("Evaluation", True, False)
-        
-        latents = np.concatenate(latents, axis=0)
-        labels = np.concatenate(labels, axis=0)
-        if len(latents) > 0:
-            print("Computing UMAP Projection...")
-            plot_umap(latents, labels)
-
 
     @abstractmethod
     def interactive_evaluation(self):
@@ -403,9 +409,10 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
     def batch_per_epoch(self) -> int:
         return int(math.ceil(len(self.train_loader) / self.batch_size))
 
-    def next_batch(self, training: bool):
+    def next_batch(self, training: bool, lookup_labels: bool = False):
         dataset = self.train_loader if training else self.test_loader
         indices = self.training_indices if training else self.test_indices
+        labels = self.train_labels if training else self.test_labels
         np.random.shuffle(indices)
 
         complete = False
@@ -423,8 +430,8 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
             spectrograms = torch.tensor(dataset[batch_indices], dtype=torch.float32)
             spectrograms = spectrograms.flatten(start_dim=1, end_dim=2) if self.model.flatten else spectrograms.unsqueeze(1)
 
-            if not training and self._file_name_to_label is not None:
-                batch_indices = self._file_name_to_label(self.test_labels[batch_indices])
+            if lookup_labels and self._file_name_to_label is not None:
+                batch_indices = self._file_name_to_label(labels[batch_indices])
 
             yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
 

@@ -33,7 +33,7 @@ class LinearExperiment(AutoencoderExperiment):
     def batch_per_epoch(self) -> int:
         return int(math.ceil(self.training_data.shape[0] / self.batch_size))
     
-    def next_batch(self, training):
+    def next_batch(self, training, lookup_labels: bool = False):
         dataset = self.training_data if training else self.evaluation_data
 
         np.random.shuffle(dataset)

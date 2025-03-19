@@ -194,6 +194,9 @@ class MainView(ctk.CTkFrame):
         
         def interactive_eval_command():
             self._run_closed(lambda: self.actions.interactive_evaluation())
+        
+        def umap_proj_command():
+            self._run_closed(lambda: self.actions.instantiate_experiment().display_umap_projection())
 
         self.btn_train = ctk.CTkButton(self.btn_frame, text="Start Training", height=35, command=train_command)
         self.btn_train.pack(side=ctk.RIGHT, padx=10, pady=10)
@@ -203,6 +206,9 @@ class MainView(ctk.CTkFrame):
 
         self.btn_interactive_eval = ctk.CTkButton(self.btn_frame, text="Interactive Evaluation", height=35, command=interactive_eval_command)
         self.btn_interactive_eval.pack(side=ctk.RIGHT, padx=10, pady=10)
+        
+        self.btn_umap_proj = ctk.CTkButton(self.btn_frame, text="Show UMAP", height=35, command=umap_proj_command)
+        self.btn_umap_proj.pack(side=ctk.RIGHT, pady=10)
 
         self.btn_quit = ctk.CTkButton(self.btn_frame, text="Exit", height=35, command=self.gui.quit)
         self.btn_quit.configure(fg_color='#e63939', hover_color='#8f2727')
@@ -292,6 +298,7 @@ class MainView(ctk.CTkFrame):
         if selected_model is not None:
             self.btn_interactive_eval.configure(state="normal")
             self.btn_eval.configure(state="normal")
+            self.btn_umap_proj.configure(state="normal")
 
         self._update_code_displaybox()
     
