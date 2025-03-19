@@ -37,7 +37,7 @@ def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, h
     sine_wave = sum(sine_waves) / len(hz)
     sine_wave_pcm = np.int16(sine_wave * 32767)  # Normalize to int16 which is the pcm data size (no compression)
 
-    file_path = os.path.join(to, f"sine_wave_{'_'.join(map(lambda x: str(x), hz))}.wav")
+    file_path = os.path.join(to, f"sinewave{len(hz)}.{'_'.join(map(lambda x: str(x), hz))}.wav")
         
     write(file_path, sample_rate, sine_wave_pcm)
     return file_path
@@ -55,7 +55,7 @@ def generate_ascending_sine_wave(to: str, sample_rate: int = 44100, duration: fl
     sine_wave_pcm = np.int16(sine_wave * 32767)  # Normalize to int16 which is the pcm data size (no compression)
 
     write(
-        os.path.join(to, f"sine_asc_wave_{int(hz_min)}-{int(hz_max)}.wav"),
+        os.path.join(to, f"sineasc.{int(hz_min)}-{int(hz_max)}.wav"),
         sample_rate, sine_wave_pcm
     )
 
@@ -65,7 +65,7 @@ def generate_bouncing_wave(to: str, sample_rate: int = 44100, duration: float = 
     phase = 2 * np.pi * np.cumsum(freq_modulation) / sample_rate
     sine_wave = amp * np.sin(phase)
     sine_wave_pcm = np.int16(sine_wave * 32767)
-    filename = os.path.join(to, f"sine_bounce_wave_{int(hz_min)}-{int(hz_max)}_{int(period)}s.wav")
+    filename = os.path.join(to, f"sinebounce.{int(hz_min)}-{int(hz_max)}_{int(period)}s.wav")
     write(filename, sample_rate, sine_wave_pcm)
 
 def generate_instrument_sound(to: str, sample_rate=44100, duration=3.0, frequency=261.63):
@@ -79,7 +79,7 @@ def generate_instrument_sound(to: str, sample_rate=44100, duration=3.0, frequenc
     signal = np.int16(signal / np.max(np.abs(signal)) * 32767)
     
     write(
-        os.path.join(to, f"instrument_{frequency}Hz.wav"),
+        os.path.join(to, f"instrument.{frequency}Hz.wav"),
         sample_rate, signal
     )
 

@@ -1,3 +1,4 @@
+from typing import Iterable
 import torch.optim as optim
 
 from os import path
@@ -49,6 +50,10 @@ class FmaReconstructionScenarios(AudioBasedScenarioContainer):
     @property
     def dataset_info(self) -> tuple:
         return "https://os.unil.cloud.switch.ch/fma/fma_medium.zip", 22721.29, "fma_medium"
+
+    def map_filename_to_label(self, filename):
+        print(isinstance(filename, Iterable))
+        return filename
 
     @scenario(name="FMA CVAE", version="1.0-LOW32", description="")
     def cvae_core32(self):

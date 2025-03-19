@@ -10,13 +10,13 @@ import torch.optim as optim
 from torchsummary import summary
 
 from os import path, makedirs
-from typing import Any, Callable, Union
+from typing import Any, Callable, Iterable, Union
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 import aitunes.utils as utils
 from aitunes.modules import AiTunesAutoencoderModule
-from aitunes.utils import get_loading_char
+from aitunes.utils import get_loading_char, plot_umap
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
 
 
@@ -154,14 +154,31 @@ class AutoencoderExperiment(ABC):
         self._support.log("An evaluation session of the model is about to start...")
         self._support.blank_epoch()
         self._model.eval()
+        latents, labels = [], []
         
         with torch.no_grad():            
             for batch, *extra in self.next_batch(training=False):
                 embedding, prediction, *args = self._model(batch, training=False)
                 batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
+                # Fill in latents and labels for UMAP projection
+                if len(extra) > 0 and len(args) > 0:  # First check a label is indeed given by the next_batch function
+                    batch_labels = extra[0]
+                    latents.append(args[0].cpu().numpy())  # Args[0] is mu
+                    if isinstance(batch_labels, torch.Tensor):
+                        labels.append(batch_labels.cpu().numpy())
+                    else:
+                        labels.append(batch_labels)
+                # Add batch result
                 self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)
             self._support.log_running_loss("Evaluation", True, False)
+        
+        latents = np.concatenate(latents, axis=0)
+        labels = np.concatenate(labels, axis=0)
+        if len(latents) > 0:
+            print("Computing UMAP Projection...")
+            plot_umap(latents, labels)
+
 
     @abstractmethod
     def interactive_evaluation(self):
@@ -350,17 +367,33 @@ class AutoencoderExperimentSupport:
 
 class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
     # TODO : Move this to Experiments/Cases, it has nothing to do here
-    def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int):
+    def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int, file_name_to_label: Callable = None):
+        """
+        Autoencoder Experiment based on spectrogram reconstruction
+
+        Args:
+            name (str): Experimentation name
+            model (nn.Module): Model to train or evaluate
+            weights_path (str): Path to the model + optimizer weights
+            loss_criterion (Callable): Loss compute method
+            optimizer (nn.optim.Optimizer): Optimizer used by the model
+            training_data (h5py.File): Training dataset file instance
+            evaluation_data (h5py.File): Evaluation dataset file instance
+            mode (AudioFeatures): Audio quality settings used during interactive evaluation 
+            batch_size (int): # of items per batch
+            file_name_to_label (Callable[[str | Iterable[str]], Iterable[str | int]]): Callable to map the original file name to a label
+        """
         super().__init__(name, model, weights_path, loss_criterion, optimizer)
 
         self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
         self.training_indices = np.arange(len(self.train_loader))
-
+        
         self.test_loader, self.test_labels = evaluation_data["spectrograms"], evaluation_data["labels"]
         self.test_indices = np.arange(len(self.test_loader))
 
         self.mode = mode
         self._batch_size = batch_size
+        self._file_name_to_label = file_name_to_label
     
     @property
     def batch_size(self) -> int:
@@ -386,8 +419,12 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
                 current_index += batch_size
 
             batch_indices = np.sort(batch_indices)
+
             spectrograms = torch.tensor(dataset[batch_indices], dtype=torch.float32)
             spectrograms = spectrograms.flatten(start_dim=1, end_dim=2) if self.model.flatten else spectrograms.unsqueeze(1)
+
+            if not training and self._file_name_to_label is not None:
+                batch_indices = self._file_name_to_label(self.test_labels[batch_indices])
 
             yield spectrograms, batch_indices  # No real labels passed, but ids to the spectrograms.
 

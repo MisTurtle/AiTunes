@@ -1,3 +1,5 @@
+from typing import Iterable
+import numpy as np
 import torch.optim as optim
 
 from os import path
@@ -57,7 +59,14 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
     
     def _create_audios(self):
         generate_dataset_of_simple_instruments(self.path_to_audio_root, sample_rate=self.all_modes[0].sample_rate, unit_duration=self.duration, unit_per_type=500)
-        
+    
+    def map_filename_to_label(self, filename):
+        if not isinstance(filename, Iterable):
+            filename = [filename]
+        elif isinstance(filename, np.ndarray):
+            filename = map(lambda byteFilename: byteFilename.decode('utf-8'), filename.tolist())
+        return [f.split('.')[0] for f in filename]
+
     @scenario(name="CVAE", version="low-dim8", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 8")
     def cvae_low8(self):
         self.mode = 1

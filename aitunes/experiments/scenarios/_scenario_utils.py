@@ -1,5 +1,5 @@
 from os import path
-from typing import Union, final
+from typing import Iterable, Union, final
 from abc import abstractmethod, ABC
 
 import os
@@ -208,7 +208,7 @@ class AudioBasedScenarioContainer(ScenarioContainer):
         self.mode = None  # Datasets are generated when switching modes. See mode.setter
         model, loss, optimizer = s(self)
         assert self.mode is not None
-        return SpectrogramBasedAutoencoderExperiment(self.identifier, model, model_path or s.model_path, loss, optimizer, self.__training_file, self.__eval_file, self.mode, self.batch_size)
+        return SpectrogramBasedAutoencoderExperiment(self.identifier, model, model_path or s.model_path, loss, optimizer, self.__training_file, self.__eval_file, self.mode, self.batch_size, self.map_filename_to_label)
 
     def _free_resources(self):
         if self.__training_file is not None:
@@ -231,6 +231,10 @@ class AudioBasedScenarioContainer(ScenarioContainer):
         if not path.exists(self.path_to_audio_root) and (not path.exists(self.path_to_training_spectrograms) or not path.exists(self.path_to_eval_spectrograms)):
             self._create_audios()
         precompute_spectrograms_for_audio_folder(self.path_to_audio_root, self.path_to_training_spectrograms, self.path_to_eval_spectrograms, self.eval_proportions, self.mode, self.preprocess_audio, self.preprocess_spectrogram)
+
+    @abstractmethod
+    def map_filename_to_label(self, filename: str|Iterable[str]) -> str | Iterable[str]:
+        pass
 
     def __del__(self):
         self._free_resources()

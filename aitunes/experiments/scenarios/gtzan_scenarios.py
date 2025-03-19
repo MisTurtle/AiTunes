@@ -1,4 +1,6 @@
 from os import path
+from typing import Iterable
+import numpy as np
 import torch.optim as optim
 
 from aitunes.modules import CVAE, ResNet2dV1
@@ -49,6 +51,13 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
     @property
     def dataset_info(self):
         return "https://www.kaggle.com/api/v1/datasets/download/andradaolteanu/gtzan-dataset-music-genre-classification", 1241.20, "Data"
+
+    def map_filename_to_label(self, filename):
+        if not isinstance(filename, Iterable):
+            filename = [filename]
+        elif isinstance(filename, np.ndarray):
+            filename = map(lambda byteFilename: byteFilename.decode('utf-8'), filename.tolist())
+        return [f.split('.')[0] for f in filename]
 
     @scenario(name="ResNet2D", version="low-dim16", description="Application of the residual network architecture on complexe, low-quality audio data. Latent Dim: 16")
     def resnet_low16(self):

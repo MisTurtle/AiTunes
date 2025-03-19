@@ -8,11 +8,13 @@ import time
 import string
 import zipfile
 import h5py
+from matplotlib import pyplot as plt
 import numpy as np
 import random
 import requests
 import torch
 import torch.nn.functional as F
+import umap
 
 quiet: bool = False
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -127,3 +129,14 @@ def append_to_dataset(path_to: str, datasets: dict):
                 maxshape = (None,) + value.shape[1:]
                 f.create_dataset(key, data=value, maxshape=maxshape, chunks=True)
 
+def plot_umap(latents, labels):
+    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean')
+    embedding = reducer.fit_transform(latents)
+
+    plt.figure(figsize=(10, 7))
+
+    _, classes = np.unique(labels, return_inverse=True)
+    scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=classes, cmap='Spectral', alpha=0.7)
+    plt.colorbar(scatter, label="Classes")
+    plt.title("UMAP Projection of VAE Latent Space")
+    plt.show()
