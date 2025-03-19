@@ -15,18 +15,19 @@
 # --headless -Q -E CIFAR10 -S "vq-resnet2d_better_world" -e 100 -s 10
 
 # SINEWAVE
-# --headless -Q -E SINEWAVE -S "cvae_low-dim8" -e 200 -s 50
-# --headless -Q -E SINEWAVE -S "cvae_low-dim16" -e 200 -s 50
-# --headless -Q -E SINEWAVE -S "cvae_low-dim32" -e 200 -s 50
-# --headless -Q -E SINEWAVE -S "resnet2d_low-dim32" -e 200 -s 50
-# --headless -Q -E SINEWAVE -S "vq-resnet2d_low-dim32" -e 200 -s 50
+--headless -Q -E SINEWAVE -S "cvae_low-dim8" -e 200 -s 50
+--headless -Q -E SINEWAVE -S "cvae_low-dim16" -e 200 -s 50
+--headless -Q -E SINEWAVE -S "cvae_low-dim32" -e 200 -s 50
+--headless -Q -E SINEWAVE -S "resnet2d_low-dim32" -e 200 -s 50
+--headless -Q -E SINEWAVE -S "vq-resnet2d_low-dim32" -e 200 -s 50
 
 # GTZAN
 # --headless -Q -E GTZAN -S "resnet2d_low-dim16" -e 300 -s 50
---headless -Q -E GTZAN -S "resnet2d_low-dim32" -e 300 -s 50
---headless -Q -E GTZAN -S "resnet2d_low-dim64" -e 300 -s 50
---headless -Q -E GTZAN -S "resnet2d_low-dim128" -e 300 -s 50
+# --headless -Q -E GTZAN -S "resnet2d_low-dim32" -e 300 -s 50
+# --headless -Q -E GTZAN -S "resnet2d_high-dim32" -e 500 -s 250
+# --headless -Q -E GTZAN -S "resnet2d_low-dim64" -e 300 -s 50
+# --headless -Q -E GTZAN -S "resnet2d_high-dim64" -e 500 -s 250
+# --headless -Q -E GTZAN -S "resnet2d_low-dim128" -e 300 -s 50
+# --headless -Q -E GTZAN -S "resnet2d_high-dim128" -e 500 -s 250
 # --headless -Q -E GTZAN -S "resnet2d_low-dim256" -e 300 -s 50
-# --headless -Q -E GTZAN -S "vq-resnet2d_test1" -e 300 -s 50
 # --headless -Q -E GTZAN -S "vq-resnet2d_test2" -e 300 -s 50
-# --headless -Q -E GTZAN -S "vq-resnet2d_test3" -e 300 -s 50

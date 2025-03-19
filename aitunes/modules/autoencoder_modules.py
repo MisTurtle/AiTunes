@@ -682,7 +682,7 @@ class SonnetEMA(nn.Module):
 
 class VectorQuantizer(nn.Module):
 
-    def __init__(self, embedding_dim: int, num_embeddings: int, ema: bool = True, random_restart: int = 0, decay: float = 0.99, epsilon: float = 1e-5):
+    def __init__(self, embedding_dim: int, num_embeddings: int, ema: bool = True, random_restart: int = 0, decay: float = 0.99, epsilon: float = 1e-5, restart_threshold: int = 1):
         """
         VectorQuantizer takes an input vector and maps it to the closest in the Embedding Table, performing an Exponential Moving Average iteration if enabled
 
@@ -693,6 +693,7 @@ class VectorQuantizer(nn.Module):
             random_restart (int, optional): How often to perform a random codebook restart, a strategy to fight against codebook collapse Defaults to 0, means never.
             decay (float, optional): Weight given to past values. Closer to one means a smoother and slower reaction to changes. Defaults to 0.99.
             epsilon (float, optional): Epsilon to prevent numerical instability. Defaults to 1e-5.
+            restart_threshold (int, optional): Threshold under which codebook entries will be reset after ``restart_every`` batches
         """
         super().__init__()
         self.embedding_dim = embedding_dim
@@ -701,6 +702,7 @@ class VectorQuantizer(nn.Module):
         self.epsilon = epsilon
         self.random_restart, self.restart_in = random_restart, random_restart
         self.ema = ema
+        self.restart_threshold = restart_threshold
 
         # Vector Embedding Table
         self.embeddings = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim)
@@ -765,8 +767,7 @@ class VectorQuantizer(nn.Module):
                     self.restart_in -= 1
                     if self.restart_in == 0:
                         self.restart_in = self.random_restart
-                        threshold = 1.0  # Minimum usage: 1
-                        dead_indices = torch.where(self.used_embeddings < threshold)[0]
+                        dead_indices = torch.where(self.used_embeddings < self.restart_threshold)[0]
                         if dead_indices.numel() > 0:
                             # Reset dead entries with samples from the current batch
                             rand_indices = torch.randint(0, flat_x.size(0), (dead_indices.shape[0], ))
@@ -799,7 +800,8 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
             use_ema: bool = True,
             random_restart: int = 0,
             decay: float = 0.99,
-            epsilon: float = 1e-5
+            epsilon: float = 1e-5,
+            restart_threshold: int = 1
     ):
         """
         Implementation of a VQVAE Residual Neural Network inspired by the original paper at https://arxiv.org/abs/1711.00937,
@@ -824,7 +826,7 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
 
         self._encoder = ResidualEncoderV2(input_shape, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens)
         self._pre_vq_conv = nn.Conv2d(num_hiddens, embedding_dim, kernel_size=1)
-        self._vq = VectorQuantizer(embedding_dim, num_embeddings, use_ema, random_restart, decay, epsilon)
+        self._vq = VectorQuantizer(embedding_dim, num_embeddings, use_ema, random_restart, decay, epsilon, restart_threshold)
         self._decoder = ResidualDecoderV2(input_shape, embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens, self._encoder.shapes[::-1], decoder_activation)
 
     def encode(self, x):

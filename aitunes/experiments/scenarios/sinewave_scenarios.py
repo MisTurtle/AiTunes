@@ -72,7 +72,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
             (create_mse_loss(reduction='mean'), 1),
             (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
 
     @scenario(name="CVAE", version="low-dim16", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 16")
@@ -89,7 +89,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
             (create_mse_loss(reduction='mean'), 1),
             (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
 
     @scenario(name="CVAE", version="low-dim32", description="Scenarios in this series aim to find a decent latent space size for low quality audio data as simple as sinewave combinations. Latent Dim: 32")
@@ -106,7 +106,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
             (create_mse_loss(reduction='mean'), 1),
             (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
 
     @scenario(name="ResNet2D", version="low-dim32", description="Application of the residual network infrastructure on audio data. Results were pretty good with the CIFAR10 experiment, so this scenario will attempt to validate its superiority. Latent Dim: 32")
@@ -118,7 +118,7 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
             (create_mse_loss(reduction='mean'), 1),
             (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 16)), 0.00001)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
     
     @scenario(name="VQ-ResNet2D", version="low-dim32", description="An attempt at implementing a VQ-VAE model (using the ResNet2D convolutional architecture) for audio data. Latent Dim: 32")
@@ -127,17 +127,18 @@ class SinewaveReconstructionScenarios(AudioBasedScenarioContainer):
         model = VQ_ResNet2D(
             (1, *self.mode.spectrogram_size),
             num_hiddens=64,
-            num_downsampling_layers=2,
-            num_residual_layers=2,
+            num_downsampling_layers=4,
+            num_residual_layers=3,
             num_residual_hiddens=32,
             embedding_dim=32,
-            num_embeddings=1024,
-            random_restart=32
+            num_embeddings=512,
+            random_restart=32,
+            restart_threshold=10
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),
             (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)
         )
-        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
 

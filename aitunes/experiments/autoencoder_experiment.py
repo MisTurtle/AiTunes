@@ -162,7 +162,7 @@ class AutoencoderExperiment(ABC):
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
                 self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)
             self._support.log_running_loss("Evaluation", True, False)
-            
+
     @abstractmethod
     def interactive_evaluation(self):
         """
