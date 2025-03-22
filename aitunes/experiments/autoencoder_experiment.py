@@ -133,22 +133,32 @@ class AutoencoderExperiment(ABC):
         else:
             self.save_when(lambda epoch, _: epoch % epoch_count == 0, root_folder)
     
+    def crash_nans(self):
+        self._support.log("Model failed due to NaNs. Detected in:")
+        for name, param in self._model.named_parameters():
+            if param.requires_grad and torch.isnan(param).any():
+                print(f"\t - Parameter {name}")
+            elif param.grad is not None and torch.isnan(param.grad).any():
+                print(f"\t - Gradients of {name}")
+        quit(1)
+    
     def display_umap_projection(self, on_training: bool = True):
-        mu, labels = [], []
+        latents, labels = [], []
         with torch.no_grad():
             for batch, *extra in self.next_batch(on_training, lookup_labels=True):
                 embedding, prediction, *args = self.model(batch, training=False)
                 if len(extra) > 0 and len(args) > 0:  # First check a label is indeed given by the next_batch function
                     batch_labels = extra[0]
-                    mu.append(embedding.cpu().numpy())  # Args[0] is mu
+                    latents.append(embedding.cpu().numpy())  # Args[0] is mu
                     if isinstance(batch_labels, torch.Tensor):
                         batch_labels = batch_labels.cpu().numpy()
                     labels.append(batch_labels)
-            if len(mu) > 0:
-                mu = np.concatenate(mu, axis=0)
+
+            if len(latents) > 0:
+                latents = np.concatenate(latents, axis=0)
                 labels = np.concatenate(labels, axis=0)
                 print(f"[{self._support._name}] Computing UMAP Projection...")
-                plot_umap(mu, labels)
+                plot_umap(latents, labels)
 
     def train(self, epochs: int):
         self._model.train(True)
@@ -162,6 +172,10 @@ class AutoencoderExperiment(ABC):
                 embedding, prediction, *args = self._model(batch, training=True)
                 combined_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
                 combined_loss.backward()
+
+                # Check for any nans and stop training if one or more is found
+                if torch.isnan(combined_loss):
+                    self.crash_nans()
 
                 # Run an optimizer step and log the result
                 self._optimizer.step()

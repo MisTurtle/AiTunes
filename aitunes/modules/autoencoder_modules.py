@@ -349,16 +349,16 @@ class CVAE(AiTunesAutoencoderModule):
 
 class ResnetDownsamplerV1(nn.Module):
 
-    def __init__(self, channels_in: int, channels_out: int, kernel_size: int):
+    def __init__(self, channels_in: int, channels_out: int, kernel_size: int, bn_momentum: float = 0.1):
         super().__init__()
         self._channels_in = channels_in
         self._channels_out = channels_out
         self._kernel_size = kernel_size
         
         self._conv1 = nn.Conv2d(channels_in, channels_out // 2, kernel_size, stride=2, padding=kernel_size // 2)
-        self._bn1 = nn.BatchNorm2d(channels_out // 2)
+        self._bn1 = nn.BatchNorm2d(channels_out // 2, momentum=bn_momentum)
         self._conv2 = nn.Conv2d(channels_out // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
-        self._bn2 = nn.BatchNorm2d(channels_out)
+        self._bn2 = nn.BatchNorm2d(channels_out, momentum=bn_momentum)
         self._conv_skipping = nn.Conv2d(channels_in, channels_out, kernel_size, stride=2, padding=kernel_size // 2)
         self._activation = nn.ReLU()
     
@@ -374,7 +374,7 @@ class ResnetUpsamplerV1(nn.Module):
     Simple ResNet UpSampler
     """
 
-    def __init__(self, channels_in: int, channels_out: int, kernel_size: int, output_padding: tuple[int, int]):
+    def __init__(self, channels_in: int, channels_out: int, kernel_size: int, output_padding: tuple[int, int], bn_momentum: float = 0.1):
         super().__init__()
         self._channels_in = channels_in
         self._channels_out = channels_out
@@ -382,9 +382,9 @@ class ResnetUpsamplerV1(nn.Module):
         self._output_padding = output_padding
 
         self._conv1 = nn.ConvTranspose2d(channels_in, channels_in // 2, kernel_size, stride=2, padding=kernel_size // 2, output_padding=self._output_padding)
-        self._bn1 = nn.BatchNorm2d(channels_in // 2)
+        self._bn1 = nn.BatchNorm2d(channels_in // 2, momentum=bn_momentum)
         self._conv2 = nn.ConvTranspose2d(channels_in // 2, channels_out, kernel_size, stride=1, padding=kernel_size // 2)
-        self._bn2 = nn.BatchNorm2d(channels_out)
+        self._bn2 = nn.BatchNorm2d(channels_out, momentum=bn_momentum)
         self._conv_skipping = nn.ConvTranspose2d(channels_in, channels_out, kernel_size, stride=2, padding=kernel_size // 2, output_padding=self._output_padding)
         self._activation = nn.ReLU()
         
@@ -398,12 +398,13 @@ class ResnetUpsamplerV1(nn.Module):
 
 class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE class by passing some generator for encoder and decoder modules, but would make the structure less readable (and I'm lazy, so yeah)
 
-    def __init__(self, input_shape: Sequence[int], residual_blocks: int, residual_channels: int, latent_space_dim: int, decoder_activation: ActivationType = None):
+    def __init__(self, input_shape: Sequence[int], residual_blocks: int, residual_channels: int, latent_space_dim: int, decoder_activation: ActivationType = None, bn_momentum: float = 0.1):
         super().__init__(input_shape=input_shape, flatten=False)
         self._residual_block_count = residual_blocks
         self._residual_channels = residual_channels
         self._latent_space_dim = latent_space_dim
         self._decoder_activation = decoder_activation
+        self._bn_momentum = bn_momentum
         # Encoder shapes tracking to be used in the decoder
         self._shapes = [self.input_shape[1:]]
         self._shape_before_bottleneck = None
@@ -422,7 +423,7 @@ class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE 
         channels_in = self._residual_channels
         self._shapes.append(encoder(dummy).shape[2:])
         for _ in range(self._residual_block_count):
-            encoder.append(ResnetDownsamplerV1(channels_in, channels_in * 2, 3))
+            encoder.append(ResnetDownsamplerV1(channels_in, channels_in * 2, 3, self._bn_momentum))
             self._shapes.append(encoder(dummy).shape[2:])
             channels_in *= 2
         self._shape_before_bottleneck = encoder(dummy).shape[1:]
@@ -438,7 +439,7 @@ class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE 
         for i in range(self._residual_block_count):
             input_shape, output_shape = self._shapes[::-1][i], self._shapes[::-1][i + 1]
             output_padding = compute_transpose_padding(kernel_size=3, padding=3 // 2, stride=2, input_shape=input_shape, output_shape=output_shape)
-            decoder.append(ResnetUpsamplerV1(channels_in, channels_in // 2, 3, output_padding))
+            decoder.append(ResnetUpsamplerV1(channels_in, channels_in // 2, 3, output_padding, self._bn_momentum))
             channels_in //= 2
         
         output_padding = compute_transpose_padding(kernel_size=3, padding=1, stride=2, input_shape=self._shapes[1], output_shape=self._shapes[0])
