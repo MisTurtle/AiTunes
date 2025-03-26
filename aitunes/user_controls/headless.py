@@ -1,11 +1,18 @@
 import os
-from typing import Any, Iterable, Union
+from typing import Any, Iterable, Union, NamedTuple
 
 # AiTunes imports
 import aitunes.utils as utils
 from aitunes.experiments import scenarios
 from aitunes.experiments.autoencoder_experiment import AutoencoderExperiment
 from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer, ScenarioDescriptor
+
+
+class ModelIdentifier(NamedTuple):
+
+    experiment: Union[ScenarioContainer, None]
+    scenario: Union[ScenarioDescriptor, None]
+    model_path: Union[str, None]
 
 
 class HeadlessActionPipeline:
@@ -181,6 +188,17 @@ class HeadlessActionPipeline:
         return self._selected_model
 
     #
+    # vvv List and select production-grade models
+    #
+    def list_production_releases(self) -> list:
+        identifiers: list[ModelIdentifier] = []
+        for experiment in scenarios.all_scenarios.values():
+            for scenario in experiment.scenarios.values():
+                if scenario.prod_grade and os.path.exists(scenario.model_path):
+                    identifiers.append(ModelIdentifier(experiment, scenario, scenario.model_path))
+        return identifiers
+
+    #
     # vvv Code generator to initiate the current state
     #
     def get_current_code(self, epochs: int, save_every: int, plotting: bool) -> str:
@@ -189,6 +207,7 @@ class HeadlessActionPipeline:
         c = self.__class__
         imports = f"from {c.__module__} import {c.__name__}"
         lines = [
+            f"actions.quiet({str(utils.quiet)})",
             f"actions = {c.__name__}()",
             f"actions.select_experiment('{self.get_selected_experiment().identifier}')"
         ]

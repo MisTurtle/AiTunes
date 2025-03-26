@@ -17,6 +17,7 @@ class ScenarioDescriptor:
     name: str  # Given through the decorator
     version: str  # Given through the decorator
     description: str  # Given through the decorator
+    prod_grade: bool  # Given through the decorator
     identifier: str  # Deduced from the name
     model_path: str  # Assigned when parsed by the TaskInitiator subclass
     history_path: str  # --
@@ -25,18 +26,25 @@ class ScenarioDescriptor:
     def __call__(self, *args, **kwds): ...
 
 
-def scenario(name: str, version: str = "1.0", description: Union[str, None] = None) -> ScenarioDescriptor:
+def scenario(name: str, version: str = "1.0", description: Union[str, None] = None, prod_grade: bool = False) -> ScenarioDescriptor:
     """
     Generates a decorator that will add additional information about the scenario
-    :param name: The name to display for the task on GUIs and in the console
-    :param version: To discriminate between similar experiments. Probably used alongside the display name
-    :param description: Additional information about the scenario (Why it was created, its features and expectations, ...)
+
+    Args:
+        name (str): The name to display for the task on GUIs and in the console
+        version (str, optional): To discriminate between similar experiments. Probably used alongside the display name. Defaults to "1.0".
+        description (Union[str, None], optional): Additional information about the scenario (Why it was created, its features and expectations, ...). Defaults to None.
+        prod_grade (bool, optional): Is the scenario production grade. Defaults to False.
+
+    Returns:
+        ScenarioDescriptor: The function packed with all the information above
     """
     def decorator(f):
         f.name = name
         f.version = version
         f.description = description or "No description provided"
         f.identifier = name.lower().replace(" ", "_") + "_" + version
+        f.prod_grade = prod_grade
         f._is_scenario = True
         return f
     

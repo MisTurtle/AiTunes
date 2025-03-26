@@ -156,7 +156,7 @@ class MainView(ctk.CTkFrame):
         self.set_plotting_cb.deselect()
         self.set_plotting_cb.pack(side=ctk.TOP, anchor="w", pady=10, padx=10)
 
-        self.set_quiet_cb = ctk.CTkCheckBox(self.set_frame, text="Quiet Mode", font=("Helvetica", 12), command=lambda: self.actions.quiet(self.set_quiet_cb.get() == 1))
+        self.set_quiet_cb = ctk.CTkCheckBox(self.set_frame, text="Quiet Mode", font=("Helvetica", 12), command=lambda: (self.actions.quiet(self.set_quiet_cb.get() == 1), self._update_code_displaybox()))
         self.set_quiet_cb.select()
         self.set_quiet_cb.pack(side=ctk.TOP, anchor="w", pady=10, padx=10)
 
