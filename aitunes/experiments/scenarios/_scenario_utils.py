@@ -105,7 +105,7 @@ class ScenarioContainer(ABC):
         return self._scenarios
 
     @abstractmethod
-    def instantiate(self, s: ScenarioDescriptor, model_path: Union[str, False, None]) -> AutoencoderExperiment:
+    def instantiate(self, s: ScenarioDescriptor, model_path: Union[str, bool, None]) -> AutoencoderExperiment:
         """
         Instantiate a task case with some scenario and returns it
         :param scenario: The scenario to instantiate

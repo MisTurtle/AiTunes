@@ -1,7 +1,7 @@
 from os import path, makedirs
 from typing import Literal, Union
 
-import os
+import os , io
 import librosa
 import soundfile as sf
 import numpy as np
@@ -279,3 +279,6 @@ class AudioProcessingInterface:
             makedirs(path.dirname(outpath), exist_ok=True)
         sf.write(outpath, self._y, self._sr)
         return self
+    
+    def save_to(self, to: io.BytesIO) :
+        sf.write(to, self._y , self._sr)

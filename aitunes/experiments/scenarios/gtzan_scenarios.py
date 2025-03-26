@@ -159,7 +159,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
         
-    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size")
+    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size", prod_grade=True)
     def vq_resnet_test1(self):
         self.mode = 1
         model = VQ_ResNet2D(

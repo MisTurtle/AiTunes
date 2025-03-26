@@ -21,6 +21,18 @@ class HeadlessActionPipeline:
     Could serve as an API endpoint for external programs using this package
     Mainly used to quickly scrap out some training program and by the GUI 
     """
+    
+    #
+    # vvv List and select production-grade models
+    #
+    @staticmethod
+    def list_production_releases() -> list[ModelIdentifier]:
+        identifiers: list[ModelIdentifier] = []
+        for experiment in scenarios.all_scenarios.values():
+            for scenario in experiment.scenarios.values():
+                if scenario.prod_grade and os.path.exists(scenario.model_path):
+                    identifiers.append(ModelIdentifier(experiment, scenario, scenario.model_path))
+        return identifiers
 
     def __init__(self):
         self._selected_experiment: Union[ScenarioContainer, None] = None
@@ -186,17 +198,6 @@ class HeadlessActionPipeline:
         if self._selected_model is None or not os.path.exists(self._selected_model):
             return None
         return self._selected_model
-
-    #
-    # vvv List and select production-grade models
-    #
-    def list_production_releases(self) -> list:
-        identifiers: list[ModelIdentifier] = []
-        for experiment in scenarios.all_scenarios.values():
-            for scenario in experiment.scenarios.values():
-                if scenario.prod_grade and os.path.exists(scenario.model_path):
-                    identifiers.append(ModelIdentifier(experiment, scenario, scenario.model_path))
-        return identifiers
 
     #
     # vvv Code generator to initiate the current state
