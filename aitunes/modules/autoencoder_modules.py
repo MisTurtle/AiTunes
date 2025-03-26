@@ -707,7 +707,7 @@ class VectorQuantizer(nn.Module):
 
         # Vector Embedding Table
         self.embeddings = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim)
-        self.embeddings.weight.data.uniform_(-1 / num_embeddings, 1 / num_embeddings)  # Make the embeddings close to each other so encoder outputs aren't inherently closer to a few ones
+        self.embeddings.weight.data.uniform_(-1, 1)  # Make the embeddings close to each other so encoder outputs aren't inherently closer to a few ones
         self.used_embeddings = torch.zeros(self.embeddings.weight.shape[0])
 
         # EMA var

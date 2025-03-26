@@ -147,28 +147,6 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
-
-    @scenario(name="ResNet2D", version="high-dim128", description="Application of the residual network architecture on complexe, high-quality audio data. Latent Dim: 128")
-    def resnet_high128(self):
-        self.mode = 0
-        model = ResNet2dV1((1, *self.mode.spectrogram_size), 5, 64, 128)
-        loss = combine_losses(
-            (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 32)), 0.00001)
-        )
-        optimizer = optim.Adam(model.parameters(), lr=0.00001)
-        return model, loss, optimizer
-    
-    @scenario(name="ResNet2D", version="high-dim128-momentum", description="Application of the residual network architecture on complexe, high-quality audio data, with a fix for BatchNorm2d layers breaking during evaluation due to them behaving differently with different modes. Latent Dim: 128")
-    def resnet_high128_momentum(self):
-        self.mode = 0
-        model = ResNet2dV1((1, *self.mode.spectrogram_size), 4, 64, 128, bn_momentum=0.01)
-        loss = combine_losses(
-            (create_mse_loss(reduction='mean'), 1),
-            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 32)), 0.00001)
-        )
-        optimizer = optim.Adam(model.parameters(), lr=0.00001)
-        return model, loss, optimizer
     
     @scenario(name="ResNet2D", version="low-dim256", description="Application of the residual network architecture on complexe, low-quality audio data. Latent Dim: 256")
     def resnet_low256(self):
@@ -181,19 +159,19 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
         
-    @scenario(name="VQ-ResNet2D", version="test2", description="An attempt at implementing a simple VQ-VAE model (using a better ResNet2D convolutional architecture). Latent Dim: 128, Discrete Vectors: 8192, Downsampling: 2")
-    def vq_resnet_test2(self):
+    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size")
+    def vq_resnet_test1(self):
         self.mode = 1
         model = VQ_ResNet2D(
             input_shape=(1, *self.mode.spectrogram_size),
             num_hiddens=256,
-            num_downsampling_layers=2,
-            num_residual_layers=3,
+            num_downsampling_layers=4,
+            num_residual_layers=5,
             num_residual_hiddens=128,
-            embedding_dim=128,
-            num_embeddings=8192,
+            embedding_dim=64,
+            num_embeddings=2048,
             use_ema=True,
-            random_restart=64
+            random_restart=512
         )
         loss = combine_losses(
             (create_mse_loss(reduction='mean'), 1),  # Reconstruction loss
