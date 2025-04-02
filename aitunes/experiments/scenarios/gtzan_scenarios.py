@@ -159,8 +159,8 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
         
-    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size", prod_grade=True)
-    def vq_resnet_test1(self):
+    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size")
+    def vq_resnet_v1_low(self):
         self.mode = 1
         model = VQ_ResNet2D(
             input_shape=(1, *self.mode.spectrogram_size),
@@ -179,3 +179,27 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
+        
+    @scenario(name="VQ-ResNet2D", version="v1-high", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size")
+    def vq_resnet_v1_high(self):
+        self.mode = 0
+        model = VQ_ResNet2D(
+            input_shape=(1, *self.mode.spectrogram_size),
+            num_hiddens=256,
+            num_downsampling_layers=4,
+            num_residual_layers=5,
+            num_residual_hiddens=128,
+            embedding_dim=64,
+            num_embeddings=2048,
+            use_ema=True,
+            random_restart=512
+        )
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),  # Reconstruction loss
+            (create_cherry_picked_loss((0, 1), (1, 0.25)), 1)  # Codebook loss
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        return model, loss, optimizer
+    
+    
+
