@@ -6,6 +6,7 @@ import librosa
 import soundfile as sf
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 
 class AudioProcessingInterface:
@@ -36,6 +37,10 @@ class AudioProcessingInterface:
         self._path = filepath
         self._sr = kwargs.get("sr", None)
         self._y = kwargs.get("data", None)
+
+        if isinstance(self._y, torch.Tensor):
+            self._y = self._y.cpu().numpy();
+        
         self._label = kwargs.get("label", path.basename(self._path))
         kwargs.pop("data", None)
         kwargs.pop("label", None)

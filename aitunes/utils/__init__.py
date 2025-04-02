@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import umap
 
 quiet: bool = False
+summaries: bool = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 loading_cycle = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])

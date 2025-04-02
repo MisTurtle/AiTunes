@@ -14,10 +14,11 @@ from typing import Any, Callable, Iterable, Union
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+from aitunes.audio_processing.processing_interface import AudioProcessingInterface
 import aitunes.utils as utils
 from aitunes.modules import AiTunesAutoencoderModule
 from aitunes.utils import get_loading_char, plot_umap
-from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation
+from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation, reconstruct_audio
 
 
 
@@ -44,8 +45,9 @@ class AutoencoderExperiment(ABC):
         self._optimizer: optim.Optimizer = optimizer
         self._middlewares = []  # Middlewares applied when evaluating the model (Probably for plotting visual information)
 
-        summary(model, model.input_shape, device=utils.device.type)
         self._load_weights()
+        if utils.summaries:
+            summary(model, model.input_shape, device=utils.device.type)
 
     @property
     def model(self):
@@ -422,6 +424,20 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
     @property
     def batch_per_epoch(self) -> int:
         return int(math.ceil(len(self.train_loader) / self.batch_size))
+    
+    def sample_audio(self, n: int = 1, duration: float = 0) -> tuple[torch.Tensor, AudioProcessingInterface | list[AudioProcessingInterface]]:
+        self.model.eval()
+        with torch.no_grad():
+            latent = self._model.sample(n)
+            y: torch.Tensor = self._model.decode(latent)
+
+            if n == 1:
+                y = y.squeeze()
+                i = reconstruct_audio(y, features=self.mode)
+            else:
+                raise Exception("Support for batched audio generation is not yet supported")
+        return latent, i
+
 
     def next_batch(self, training: bool, lookup_labels: bool = False):
         dataset = self.train_loader if training else self.test_loader

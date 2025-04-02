@@ -17,7 +17,11 @@ class ScenarioDescriptor:
     name: str  # Given through the decorator
     version: str  # Given through the decorator
     description: str  # Given through the decorator
+
     prod_grade: bool  # Given through the decorator
+    prod_name: str  # Given through the decorator
+    prod_desc: str  # Given through the decorator
+    
     identifier: str  # Deduced from the name
     model_path: str  # Assigned when parsed by the TaskInitiator subclass
     history_path: str  # --
@@ -26,7 +30,7 @@ class ScenarioDescriptor:
     def __call__(self, *args, **kwds): ...
 
 
-def scenario(name: str, version: str = "1.0", description: Union[str, None] = None, prod_grade: bool = False) -> ScenarioDescriptor:
+def scenario(name: str, version: str = "1.0", description: Union[str, None] = None, prod_grade: bool = False, prod_name: str = "", prod_desc: str = "") -> ScenarioDescriptor:
     """
     Generates a decorator that will add additional information about the scenario
 
@@ -35,6 +39,8 @@ def scenario(name: str, version: str = "1.0", description: Union[str, None] = No
         version (str, optional): To discriminate between similar experiments. Probably used alongside the display name. Defaults to "1.0".
         description (Union[str, None], optional): Additional information about the scenario (Why it was created, its features and expectations, ...). Defaults to None.
         prod_grade (bool, optional): Is the scenario production grade. Defaults to False.
+        prod_name (str, optional): Name used to reference this model in production. Defaults to ""
+        prod_desc (str, optional): Public description for this model. Defaults to ""
 
     Returns:
         ScenarioDescriptor: The function packed with all the information above
@@ -45,6 +51,14 @@ def scenario(name: str, version: str = "1.0", description: Union[str, None] = No
         f.description = description or "No description provided"
         f.identifier = name.lower().replace(" ", "_") + "_" + version
         f.prod_grade = prod_grade
+
+        if prod_grade and not prod_name:
+            raise Exception(f"Production grade scenario {name} {version} must provide a production name.")
+        if prod_grade and not prod_desc:
+            raise Exception(f"Production grade scenario {name} {version} must provide a production description.")
+
+        f.prod_name = prod_name
+        f.prod_desc = prod_desc
         f._is_scenario = True
         return f
     

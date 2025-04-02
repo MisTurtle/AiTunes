@@ -1,18 +1,21 @@
+from collections import OrderedDict
 from flask import Flask, abort, request, jsonify, send_file
 import numpy as np
 from scipy.io.wavfile import write
 import os , io
-from aitunes.audio_processing.processing_interface import AudioProcessingInterface
+
+from aitunes import utils
 from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
 from aitunes.user_controls.headless import HeadlessActionPipeline, ModelIdentifier 
 
-app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
-OUTPUT_DIR = "Generated_Melodies"
-OUTPUT_WAV_PATH = os.path.join(OUTPUT_DIR, "generated_melody.wav")
-demo_path = os.path.join("assets","Demo")
-list_model = HeadlessActionPipeline.list_production_releases()
+app = Flask(__name__)
+utils.quiet = True
+utils.summaries = False
+
+demo_path = os.path.join("assets", "Demo")
+prod_models = OrderedDict({ model_i.scenario.prod_name: model_i for model_i in HeadlessActionPipeline.list_production_releases() })
+default_model = next(iter(prod_models))
 
 
 @app.route("/api/generate_debug_melody", methods=["GET"])
@@ -28,33 +31,36 @@ def generate_debug_melody():
     wav_buffer=io.BytesIO()
     write(wav_buffer, sample_rate, signal.astype(np.float32))
     
-
-    return send_file(wav_buffer ,mimetype="audio/wav", as_attachment=True , download_name="Debug.wav")
+    return send_file(wav_buffer, mimetype="audio/wav", as_attachment=True , download_name="Debug.wav")
 
 
 @app.route("/api/generate_melody", methods=["GET"])
 def generate_melody ():
-    audio_time = request.args.get('Time', 10)
-    file_name = request.args.get('Name',"out.wav")
-    model_id = request.args.get('Model', 0)
-    if model_id <0 or model_id >=len(list_model):
-        return abort(404)
-    
-    model: ModelIdentifier = list_model[model_id]
-    experiment: SpectrogramBasedAutoencoderExperiment = model.experiment.instantiate(model.scenario , model.model_path)
-    
-    latent = experiment.model.sample()
-    y = experiment.model.decode(latent)
-    features=experiment.mode
-    audio = io.BytesIO()
-    i = AudioProcessingInterface.create_for("", mode="log_mel", data=y, sr=features.sample_rate, n_fft=features.n_fft, hop_length=features.hop_length)
-    i.save_to(audio)
+    audio_time = request.args.get('t', 10)
+    file_name = request.args.get('name',"out.wav")
+    model_id = request.args.get('model', None)
 
-    return send_file(audio ,mimetype="audio/wav", as_attachment=True , download_name=file_name)
+    if model_id is not None and not model_id in prod_models:
+        return abort(404)
+
+    model: ModelIdentifier = prod_models[model_id if model_id is not None else default_model]
+    experiment: SpectrogramBasedAutoencoderExperiment = model.experiment.instantiate(model.scenario, model.model_path)
+    
+    audio_file = io.BytesIO()
+    audio_file.name = file_name
+
+    latent, i = experiment.sample_audio(1, audio_time)
+    i.save_to(audio_file)
+    audio_file.seek(0)
+
+    return send_file(audio_file, mimetype="audio/wav", as_attachment=True , download_name=file_name)
 
 @app.route("/api/models" , methods=["GET"])
 def list_models():
-    ret = list(map(lambda model: (model.experiment.identifier, model.scenario.identifier, model.scenario.description), list_model))     
+    ret = list(map(lambda model: {
+        "name": model.scenario.prod_name,
+        "desc": model.scenario.prod_desc
+    }, prod_models.values()))
     return jsonify(ret)
     
 @app.route("/api/download_demo", methods=["GET"])
@@ -67,7 +73,7 @@ def download_demo():
     
 
 @app.route("/api/list_demo", methods=["GET"])
-def list_Demo():
+def list_demo():
     files = os.listdir(demo_path)
     audio_files = [file for file in files]
     return jsonify({"audios": audio_files})

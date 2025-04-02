@@ -126,7 +126,15 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.00001)
         return model, loss, optimizer
     
-    @scenario(name="ResNet2D", version="high-dim64-momentum", description="Application of the residual network architecture on complexe, high-quality audio data, with a fix for BatchNorm2d layers breaking during evaluation due to them behaving differently with different modes. Latent Dim: 64")
+    @scenario(
+        name="ResNet2D",
+        version="high-dim64-momentum",
+        description="Application of the residual network architecture on complexe, high-quality audio data, with a fix for BatchNorm2d layers breaking during evaluation due to them behaving differently with different modes. Latent Dim: 64",
+        
+        prod_grade=True,
+        prod_name="Stargazing",
+        prod_desc="This model will carefully craft spectrograms that look like constellations. Looking for a cosmic lullaby? A meteor shower of beats? The Stargazing model has you covered."
+    )
     def resnet_high64_momentum(self):
         self.mode = 0
         model = ResNet2dV1((1, *self.mode.spectrogram_size), 4, 64, 64, bn_momentum=0.01)
@@ -159,7 +167,15 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
         
-    @scenario(name="VQ-ResNet2D", version="v1", description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size")
+    @scenario(
+        name="VQ-ResNet2D",
+        version="v1",
+        description="An implementation of the VQ-VAE model using a ResNet2D convolutional architecture. This test takes the first VQVAE Jukebox layer parameters and directly uncompresses the spectrogram back to its original size",
+        
+        prod_grade=True,
+        prod_name="Phobos",
+        prod_desc="Listening to this model's creations will make you feel immersed in the infinite depths of space, closer than you have ever been to extraterrestrial lifeforms"
+    )
     def vq_resnet_v1_low(self):
         self.mode = 1
         model = VQ_ResNet2D(

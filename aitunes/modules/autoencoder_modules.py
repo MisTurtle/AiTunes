@@ -45,7 +45,7 @@ class AiTunesAutoencoderModule(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def sample(self, n: int) -> torch.Tensor:
+    def sample(self, n: int = 1) -> torch.Tensor:
         """
         Sample a batch of n tensors from the latent. These latent samples are not decoded.
 
@@ -141,7 +141,7 @@ class VanillaAutoEncoder(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
-    def sample(self, n):
+    def sample(self, n = 1):
         return torch.randn((n, self.dimensions[-1]))
     
     def forward(self, x, training=False):
@@ -178,7 +178,7 @@ class VariationalAutoEncoder(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
-    def sample(self, n):
+    def sample(self, n = 1):
         return torch.randn((n, self.dimensions[-1]))
 
     def forward(self, x, training=False):
@@ -333,7 +333,7 @@ class CVAE(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
-    def sample(self, n):
+    def sample(self, n = 1):
         return torch.randn((n, self._latent_dimension))
     
     def forward(self, x, training=False):
@@ -455,7 +455,7 @@ class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE 
     def decode(self, z):
         return self._decoder(z)
     
-    def sample(self, n):
+    def sample(self, n = 1):
         return torch.randn((n, self._latent_space_dim))
     
     def forward(self, x, training=False):
@@ -840,7 +840,7 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
     def decode(self, z):
         return self._decoder(z)
     
-    def sample(self, n):
+    def sample(self, n = 1):
         return self._vq.sample(n, self._encoder.shapes[-1])
     
     def forward(self, x, training=False):
