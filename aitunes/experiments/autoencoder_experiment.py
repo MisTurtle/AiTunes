@@ -15,9 +15,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 from aitunes.audio_processing.processing_interface import AudioProcessingInterface
+from aitunes.modules.autoencoder_modules import VQ_ResNet2D
 import aitunes.utils as utils
 from aitunes.modules import AiTunesAutoencoderModule
-from aitunes.utils import get_loading_char, plot_umap
+from aitunes.utils import get_loading_char, plot_matrix, plot_umap
 from aitunes.utils.audio_utils import AudioFeatures, audio_model_interactive_evaluation, reconstruct_audio
 
 
@@ -144,23 +145,40 @@ class AutoencoderExperiment(ABC):
                 print(f"\t - Gradients of {name}")
         quit(1)
     
-    def display_umap_projection(self, on_training: bool = True):
+    def __display_umap_projection(self, on_training: bool = True):
         latents, labels = [], []
         with torch.no_grad():
             for batch, *extra in self.next_batch(on_training, lookup_labels=True):
-                embedding, prediction, *args = self.model(batch, training=False)
-                if len(extra) > 0 and len(args) > 0:  # First check a label is indeed given by the next_batch function
+                embedding, prediction, *extra = self.model(batch, training=False)
+                if len(extra) > 0:  # First check a label is indeed given by the next_batch function
                     batch_labels = extra[0]
-                    latents.append(embedding.cpu().numpy())  # Args[0] is mu
+                    latents.append(embedding.cpu().numpy())
                     if isinstance(batch_labels, torch.Tensor):
                         batch_labels = batch_labels.cpu().numpy()
                     labels.append(batch_labels)
-
-            if len(latents) > 0:
-                latents = np.concatenate(latents, axis=0)
-                labels = np.concatenate(labels, axis=0)
-                print(f"[{self._support._name}] Computing UMAP Projection...")
-                plot_umap(latents, labels)
+                else:
+                    raise RuntimeError("Labels are required for UMAP to provide any meaningful information")
+            
+            latents = np.concatenate(latents, axis=0)
+            labels = np.concatenate(labels, axis=0)
+            print(f"[{self._support._name}] Computing UMAP Projection...")
+            plot_umap(latents, labels)
+    
+    def __display_usage_matrix(self, on_training: bool = True):
+        self.model: VQ_ResNet2D
+        with torch.no_grad():
+            # Stats are stored directly inside the VQVAE model at runtime
+            for batch, *extra in self.next_batch(on_training, lookup_labels=False):
+                _ = self.model(batch, training=False)
+            stats = self.model.embedding_usage_stats().cpu().numpy()
+            plot_matrix(stats, "Discrete vectors usage accross all " + ("training" if on_training else "evaluation") + " data")
+    
+    def display_latent_performance(self, on_training: bool = True):
+        print("Computing model latent performance...")
+        if isinstance(self.model, VQ_ResNet2D):
+            self.__display_usage_matrix(on_training)
+        else:
+            self.__display_umap_projection(on_training)
 
     def train(self, epochs: int):
         self._model.train(True)

@@ -166,7 +166,7 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         )
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
-        
+    
     @scenario(
         name="VQ-ResNet2D",
         version="v1",

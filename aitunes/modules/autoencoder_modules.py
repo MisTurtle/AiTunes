@@ -709,6 +709,7 @@ class VectorQuantizer(nn.Module):
         self.embeddings = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim)
         self.embeddings.weight.data.uniform_(-1, 1)  # Make the embeddings close to each other so encoder outputs aren't inherently closer to a few ones
         self.used_embeddings = torch.zeros(self.embeddings.weight.shape[0])
+        self.overall_embedding_usage = torch.zeros((num_embeddings, ), requires_grad=False)
 
         # EMA var
         self.EMA_cluster_counts = SonnetEMA(decay, (num_embeddings, ))
@@ -735,6 +736,7 @@ class VectorQuantizer(nn.Module):
         
         # Extract the discrete vectors which are closest to the encoder's output features from the embedding table 
         encoding_indices = distances.argmin(dim=-1)  # Batch Size, Height x Width  (Index to the closest embedding vector for each latent "pixel")
+        
         quantized = torch.index_select(self.embeddings.weight, 0, encoding_indices.view(-1))  # Batch Size x Height x Width, Embedding dim 
         flat_x = flat_x.reshape((-1, flat_x.shape[-1]))  # Batch Size x Height x Width, Embedding dim
         
@@ -744,12 +746,13 @@ class VectorQuantizer(nn.Module):
 
         # Zeros everywhere, except for a 1 at the index of the discrete vector in the embedding table
         encodings = F.one_hot(encoding_indices.view(-1), num_classes=self.num_embeddings).float()  # Batch Size x Height x Width, # of discrete vectors
-        
+        cluster_count = encodings.sum(dim=0)
+        self.overall_embedding_usage += cluster_count
+
         if self.ema and training:
             # Perform Sonnet Exponential Moving Average updates manually
             with torch.no_grad():
                 # Compute usage count for each embedding
-                cluster_count = encodings.sum(dim=0)
                 updated_ema_cluster_size = self.EMA_cluster_counts(cluster_count)
                 
                 # Update embeddings EMA
@@ -774,6 +777,7 @@ class VectorQuantizer(nn.Module):
                             rand_indices = torch.randint(0, flat_x.size(0), (dead_indices.shape[0], ))
                             new_entries = flat_x[rand_indices]
                             self.embeddings.weight[dead_indices] = new_entries
+
                         self.used_embeddings = torch.zero_(self.used_embeddings)
     
         # Straight Through Estimation (To keep gradient flow going even with the undifferentiable table lookup)
@@ -829,6 +833,9 @@ class VQ_ResNet2D(AiTunesAutoencoderModule):
         self._pre_vq_conv = nn.Conv2d(num_hiddens, embedding_dim, kernel_size=1)
         self._vq = VectorQuantizer(embedding_dim, num_embeddings, use_ema, random_restart, decay, epsilon, restart_threshold)
         self._decoder = ResidualDecoderV2(input_shape, embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens, self._encoder.shapes[::-1], decoder_activation)
+
+    def embedding_usage_stats(self) -> torch.Tensor:
+        return self._vq.overall_embedding_usage
 
     def encode(self, x):
         return self._pre_vq_conv(self._encoder(x))

@@ -131,6 +131,13 @@ def append_to_dataset(path_to: str, datasets: dict):
                 f.create_dataset(key, data=value, maxshape=maxshape, chunks=True)
 
 def plot_umap(latents, labels):
+    """
+    Plot the UMAP projection of latents associated to labels
+
+    Args:
+        latents (np.ndarray): Latent representations
+        labels (np.ndarray): Labels associated to latents
+    """
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean')
     embedding = reducer.fit_transform(latents)
 
@@ -140,4 +147,24 @@ def plot_umap(latents, labels):
     scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=classes, cmap='Spectral', alpha=0.7)
     plt.colorbar(scatter, label="Classes")
     plt.title("UMAP Projection of VAE Latent Space")
+    plt.show()
+
+def plot_matrix(discrete: np.ndarray, suptitle: str):
+    """
+    Plot a visual representation of discrete in a form of a square image (or as close as it can be)
+
+    Args:
+        discrete (np.ndarray): Discrete values
+    """
+    plt.figure(figsize=(7, 7))
+    discrete = discrete.flatten()
+    
+    width = int(np.floor(np.sqrt(discrete.shape[0])))
+    height = int(np.ceil(discrete.shape[0] / width))
+    if width * height != discrete.shape[0]:
+        discrete = np.append(discrete, np.zeros((width * height - discrete.shape[0], )))
+    
+    plt.suptitle(suptitle)
+    plt.imshow(discrete.reshape(width, height), cmap='hot')
+    plt.colorbar()
     plt.show()
