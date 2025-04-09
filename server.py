@@ -1,8 +1,9 @@
+import os, io
+import numpy as np
 from collections import OrderedDict
 from flask import Flask, abort, request, jsonify, send_file
-import numpy as np
+from flask_cors import CORS, cross_origin
 from scipy.io.wavfile import write
-import os , io
 
 from aitunes import utils
 from aitunes.experiments.autoencoder_experiment import SpectrogramBasedAutoencoderExperiment
@@ -10,6 +11,9 @@ from aitunes.user_controls.headless import HeadlessActionPipeline, ModelIdentifi
 
 
 app = Flask(__name__)
+cors = CORS(app, origins="http://localhost:3000")
+app.config['CORS_HEADERS'] = 'Content-Type'
+
 utils.quiet = True
 utils.summaries = False
 
@@ -37,7 +41,7 @@ def generate_debug_melody():
 @app.route("/api/generate_melody", methods=["GET"])
 def generate_melody ():
     audio_time = request.args.get('t', 10)
-    file_name = request.args.get('name',"out.wav")
+    file_name = request.args.get('name', "out.wav")
     model_id = request.args.get('model', None)
 
     if model_id is not None and not model_id in prod_models:
