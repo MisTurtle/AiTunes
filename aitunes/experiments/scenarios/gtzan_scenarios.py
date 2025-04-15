@@ -217,5 +217,14 @@ class GtzanReconstructionScenarios(AudioBasedScenarioContainer):
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
         return model, loss, optimizer
     
-    
+    @scenario(name="ResNet2D", version="low-dim64-tiny", description="Application of the residual network architecture on complexe, low-quality audio data. Latent Dim: 64")
+    def resnet_low64_tiny(self):
+        self.mode = 1
+        model = ResNet2dV1((1, *self.mode.spectrogram_size), 2, 16, 64)
+        loss = combine_losses(
+            (create_mse_loss(reduction='mean'), 1),
+            (create_kl_loss_with_linear_annealing(over_epochs=10, batch_per_epoch=int(50000 / 32)), 0.00001)
+        )
+        optimizer = optim.Adam(model.parameters(), lr=0.0001)
+        return model, loss, optimizer
 
