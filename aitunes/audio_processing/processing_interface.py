@@ -117,8 +117,11 @@ class AudioProcessingInterface:
                 y = self._y[start:start+window_size]
         return AudioProcessingInterface(self.get_path(), mode="wave", data=y, sr=self._sr, label=label or (self.get_label() + " (Cropped)"))
 
+    def spectrogram(self, **kwargs):
+        return np.abs(librosa.stft(self._y, **kwargs))
+
     def log_spectrogram(self, **kwargs):
-        return librosa.power_to_db(np.abs(librosa.stft(self._y, **kwargs)) ** 2, ref=np.max)
+        return librosa.amplitude_to_db(self.spectrogram(**kwargs), ref=np.max)
     
     def mel_spectrogram(self, n_mels=128, **kwargs):
         return librosa.feature.melspectrogram(y=self._y, sr=self._sr, n_mels=n_mels, **kwargs)
@@ -138,7 +141,7 @@ class AudioProcessingInterface:
     # Plotting functions
     def get_plot_for(
             self,
-            features: list[Literal["wave", "log_spec", "log_mel", "mfcc", "empty"]],
+            features: list[Literal["wave", "spec", "log_spec", "mel", "log_mel", "mfcc", "empty"]],
             suptitle: Union[str, None] = None,
             title: Union[None, str, list[str]] = None,
             colorbar: Union[None, bool, list[bool]] = None,
@@ -173,29 +176,41 @@ class AudioProcessingInterface:
             match features[i]:
                 case "wave":
                     self.draw_wave(axes[i], color=wave_color, alpha=wave_alpha)
+                case "spec":
+                    spec = self.spectrogram()
+                    spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='linear', ax=axes[i])
+                    if colorbar[i]:
+                        plt.colorbar(spec_img, ax=axes[i], format="%+2.0f")
+                    axes[i].set(title=title[i] or "Spectrogram")
                 case "log_spec":
                     spec = self.log_spectrogram()
                     spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='log', ax=axes[i])
                     if colorbar[i]:
-                        plt.colorbar(spec_img, label="dB", ax=axes[i])
+                        plt.colorbar(spec_img, ax=axes[i], format="%+2.0f dB")
                     axes[i].set(title=title[i] or "Log Spectrogram")
+                case "mel":
+                    spec = self.mel_spectrogram(n_mels=n_mels)
+                    spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='mel', ax=axes[i])
+                    if colorbar[i]:
+                        plt.colorbar(spec_img, ax=axes[i], format="%+2.0f")
+                    axes[i].set(title=title[i] or "Mel Spectrogram")
                 case "log_mel":
                     spec = self.log_mel_spectrogram(n_mels=n_mels)
                     spec_img = librosa.display.specshow(spec, sr=self._sr, x_axis='time', y_axis='mel', ax=axes[i])
                     if colorbar[i]:
-                        plt.colorbar(spec_img, label="dB", ax=axes[i])
+                        plt.colorbar(spec_img, ax=axes[i], format="%+2.0f dB")
                     axes[i].set(title=title[i] or "Log Mel Spectrogram")
                 case "mfcc":
                     mfcc = self.mfcc(n_features=mfcc_features)
                     mfcc_img = librosa.display.specshow(mfcc, sr=self._sr, x_axis='time', ax=axes[i])
                     if colorbar[i]:
-                        plt.colorbar(mfcc_img, label="MFCC", ax=axes[i])
+                        plt.colorbar(mfcc_img, label="MFCCs", ax=axes[i])
                     axes[i].set(title=title[i] or "MFCC Features")
         return fig, axes
     
     def draw_wave(self, ax, color: str = 'b', alpha: float = 1.0, label: Union[str, None] = None):
         librosa.display.waveshow(self._y, sr=self._sr, ax=ax, color=color, alpha=alpha, label=label or self.get_label())
-        ax.set(title="Waveform", xlabel="Time", ylabel="Amplitude")
+        ax.set(title="Waveform", xlabel="Time (s)", ylabel="Amplitude")
     
     def compare_waves(self, *others: tuple['AudioProcessingInterface'], include_self: bool = True, colors: list[str] = None, ax=None):
         fig = None

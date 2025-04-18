@@ -22,7 +22,7 @@ def _get_smooth_amp(envelope_size: int, target_amp: float, fade_duration: int):
     return target_amp * envelope
 
 
-def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, hz: Union[float, list[float]] = 440.0, amp: float = 0.5):
+def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, hz: Union[float, list[float]] = 440.0, amp: float = 0.5, smoothing: bool = True):
     # Adapted from https://stackoverflow.com/questions/8299303/generating-sine-wave-sound-in-python
     assert -1 <= amp <= 1  # Amp has to be between -1 and 1 so the normalization to int16 works
     
@@ -31,7 +31,10 @@ def generate_sine_wave(to: str, sample_rate: int = 22050, duration: float = 5, h
     if not isinstance(hz, list):
         hz = [hz]
     
-    smooth_amp = _get_smooth_amp(len(timepoints), amp, int((duration / 20) * len(timepoints)))
+    if smoothing:
+        smooth_amp = _get_smooth_amp(len(timepoints), amp, int((duration / 20) * len(timepoints)))
+    else:
+        smooth_amp = np.ones_like(timepoints)
     # Generate sine wave
     sine_waves = [smooth_amp * np.sin(2 * np.pi * f * timepoints) for f in hz]
     sine_wave = sum(sine_waves) / len(hz)
