@@ -25,9 +25,9 @@ class MnistReconstructionScenarios(ScenarioContainer):
     def description(self):
         return "The MNIST dataset consists of 28x28 images representing digits from 0 to 9. This experiment aims to showcase the limitations of simple architectures and how more advanced ones like CVAE can be used for generating meaningful images from random latent samples."
         
-    def instantiate(self, s, model_path):
+    def instantiate(self, s, model_path, light_mode: bool = False):
         model, loss, optimizer = s(self)
-        return MnistExperiment(model, model_path or s.model_path, loss, optimizer)
+        return MnistExperiment(model, model_path or s.model_path, loss, optimizer) # TODO : Light mode support
     
     @scenario(name="AE", version="vanilla", description="Train to reconstruct images from compression to a 2D plane with a vanilla autoencoder.")
     def ae_vanilla(self):

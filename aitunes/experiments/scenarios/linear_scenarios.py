@@ -26,9 +26,9 @@ class LinearAugmentationScenarios(ScenarioContainer):
     def path_to_release_root(self):
         return path.join("assets", "Models", "linear_augmentation")
  
-    def instantiate(self, s, model_path):
+    def instantiate(self, s, model_path, light_mode: bool = False):
         model, loss, optimizer = s(self)
-        return LinearExperiment(model, model_path or s.model_path, loss, optimizer)
+        return LinearExperiment(model, model_path or s.model_path, loss, optimizer)  # TODO : Light mode support
 
     @scenario(name="AE", version="hello_world", description="A test to validate the SimpleAutoEncoder architecture")
     def ae_hello_world(self):

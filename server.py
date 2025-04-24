@@ -48,7 +48,7 @@ def generate_melody ():
         return abort(404)
 
     model: ModelIdentifier = prod_models[model_id if model_id is not None else default_model]
-    experiment: SpectrogramBasedAutoencoderExperiment = model.experiment.instantiate(model.scenario, model.model_path)
+    experiment: SpectrogramBasedAutoencoderExperiment = model.experiment.instantiate(model.scenario, model.model_path, light_mode=True)
     
     audio_file = io.BytesIO()
     audio_file.name = file_name

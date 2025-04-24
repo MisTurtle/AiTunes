@@ -420,7 +420,7 @@ class AutoencoderExperimentSupport:
 
 class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
     # TODO : Move this to Experiments/Cases, it has nothing to do here
-    def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int, file_name_to_label: Callable = None):
+    def __init__(self, name, model, weights_path, loss_criterion, optimizer, training_data: h5py.File, evaluation_data: h5py.File, mode: AudioFeatures, batch_size: int, file_name_to_label: Callable = None, generative_mode: bool = False):
         """
         Autoencoder Experiment based on spectrogram reconstruction
 
@@ -438,11 +438,12 @@ class SpectrogramBasedAutoencoderExperiment(AutoencoderExperiment):
         """
         super().__init__(name, model, weights_path, loss_criterion, optimizer)
 
-        self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
-        self.training_indices = np.arange(len(self.train_loader))
-        
-        self.test_loader, self.test_labels = evaluation_data["spectrograms"], evaluation_data["labels"]
-        self.test_indices = np.arange(len(self.test_loader))
+        if not generative_mode:
+            self.train_loader, self.train_labels = training_data["spectrograms"], training_data["labels"]
+            self.training_indices = np.arange(len(self.train_loader))
+            
+            self.test_loader, self.test_labels = evaluation_data["spectrograms"], evaluation_data["labels"]
+            self.test_indices = np.arange(len(self.test_loader))
 
         self.mode = mode
         self._batch_size = batch_size

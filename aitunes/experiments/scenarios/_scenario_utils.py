@@ -119,11 +119,12 @@ class ScenarioContainer(ABC):
         return self._scenarios
 
     @abstractmethod
-    def instantiate(self, s: ScenarioDescriptor, model_path: Union[str, bool, None]) -> AutoencoderExperiment:
+    def instantiate(self, s: ScenarioDescriptor, model_path: Union[str, bool, None], light_mode: bool = False) -> AutoencoderExperiment:
         """
         Instantiate a task case with some scenario and returns it
         :param scenario: The scenario to instantiate
         :param model_path: An optional model path to override the default one used by the scenario (To load a previous model for example)
+        :param light_mode: Launch in light mode (do not load datasets)
         """
         pass
 
@@ -206,7 +207,7 @@ class AudioBasedScenarioContainer(ScenarioContainer):
         assert mode_id is None or isinstance(mode_id, int) and 0 <= mode_id < len(self.all_modes) 
         self.__current_mode = mode_id
         self._free_resources()
-        if mode_id is not None:
+        if mode_id is not None and not self.__light_mode:
             self._generate_datasets()
             self.__training_file = h5py.File(self.path_to_training_spectrograms, mode='r')
             self.__eval_file = h5py.File(self.path_to_eval_spectrograms, mode='r')
@@ -225,12 +226,14 @@ class AudioBasedScenarioContainer(ScenarioContainer):
         self.__current_mode: int = 0  # Id to the currently selected mode
         self.__training_file: Union[h5py.File, None] = None
         self.__eval_file: Union[h5py.File, None] = None
+        self.__light_mode: bool = False
 
-    def instantiate(self, s, model_path):
+    def instantiate(self, s, model_path, light_mode: bool = False):
+        self.__light_mode = light_mode
         self.mode = None  # Datasets are generated when switching modes. See mode.setter
         model, loss, optimizer = s(self)
         assert self.mode is not None
-        return SpectrogramBasedAutoencoderExperiment(self.identifier, model, model_path or s.model_path, loss, optimizer, self.__training_file, self.__eval_file, self.mode, self.batch_size, self.map_filename_to_label)
+        return SpectrogramBasedAutoencoderExperiment(self.identifier, model, model_path or s.model_path, loss, optimizer, self.__training_file, self.__eval_file, self.mode, self.batch_size, self.map_filename_to_label, light_mode)
 
     def _free_resources(self):
         if self.__training_file is not None:

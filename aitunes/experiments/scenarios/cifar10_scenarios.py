@@ -26,9 +26,9 @@ class Cifar10ReconstructionScenarios(ScenarioContainer):
     def description(self):
         return "The CIFAR10 dataset consists of 60000 3x32x32 images representing color images from ten different categories. This implementation aims to expand on the simple MNIST dataset with more complex images and see the generative potential of VAE architectures."
         
-    def instantiate(self, s, model_path):
+    def instantiate(self, s, model_path, light_mode: bool = False):
         model, loss, optimizer = s(self)
-        return Cifar10Experiment(model, model_path or s.model_path, loss, optimizer)
+        return Cifar10Experiment(model, model_path or s.model_path, loss, optimizer)  # TODO : Light mode support
     
     @scenario(name="CVAE", version="dim16", description="This series aims to set a base and visually compare results obtained with different latent dimensions. It uses MSE Loss combined with KL Divergence loss linearly annealed over 5 epochs. Latent Dim: 16")
     def cvae_core16(self):
