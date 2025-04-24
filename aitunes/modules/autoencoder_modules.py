@@ -193,7 +193,7 @@ class VariationalAutoEncoder(AiTunesAutoencoderModule):
 
 def compute_transpose_padding(kernel_size: int, padding: int, stride: Union[int, tuple[int, int]], input_shape: tuple[int, int], output_shape: tuple[int, int]):
     """
-    Computes padding and output_padding for ConvTranspose2d layers
+    Computes output_padding for ConvTranspose2d layers
 
     Args:
         kernel_size (int): Kernel size applied to the corresponding Conv2d layer
@@ -281,7 +281,13 @@ class ConvolutionalDecoder(nn.Module):
         self._layers.append(nn.Linear(self._latent_dimension, self._channels[0] * np.prod(self._target_shapes[0])))
         self._layers.append(nn.Unflatten(1, (self._channels[0], *self._target_shapes[0])))
         for i in range(len(self._channels) - 1):
-            p_h, p_w = compute_transpose_padding(self._kernels[i], self._kernels[i] // 2, self._strides[i], self._target_shapes[i], self._target_shapes[i + 1])
+            p_h, p_w = compute_transpose_padding(
+                kernel_size=self._kernels[i],
+                padding=self._kernels[i] // 2,
+                stride=self._strides[i],
+                input_shape=self._target_shapes[i],
+                output_shape=self._target_shapes[i + 1]
+            )
             self._layers.append(nn.ConvTranspose2d(
                 in_channels=self._channels[i],
                 out_channels=self._channels[i + 1],
@@ -337,7 +343,6 @@ class CVAE(AiTunesAutoencoderModule):
         mu = self._encoder._mu(torch.randn((n, self._encoder.shapes[-1])))
         log_var = self._encoder._log_var((n, torch.randn(self._encoder.shapes[-1])))
         return reparameterize(mu, log_var)
-        # return torch.randn((n, self._latent_dimension))
     
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)

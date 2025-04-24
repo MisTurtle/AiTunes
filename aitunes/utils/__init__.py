@@ -138,6 +138,7 @@ def plot_umap(latents, labels):
         latents (np.ndarray): Latent representations
         labels (np.ndarray): Labels associated to latents
     """
+    print(labels)
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean')
     embedding = reducer.fit_transform(latents)
 

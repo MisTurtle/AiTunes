@@ -16,7 +16,7 @@ def plot_loss_evolution(filename, component_ids=None, component_names=None):
         raise ValueError("CSV must contain 'Epoch #' and 'Item Loss' columns.")
 
     df = df.sort_values("Epoch #")
-    plt.figure(figsize=(6.5, 6))
+    plt.figure(figsize=(8, 6))
     plt.plot(df["Epoch #"], df["Item Loss"], label="Total Item Loss", linewidth=2)
 
     if component_ids:
@@ -39,5 +39,6 @@ def plot_loss_evolution(filename, component_ids=None, component_names=None):
 # plot_loss_evolution(r"history\vectors_5d\ae_deep_world\20250423_230452\progress.csv")
 # plot_loss_evolution(r"history\mnist\ae_vanilla\20250301_212032\progress.csv", [1], ["MSE Loss"])
 # plot_loss_evolution(r"history\mnist\vae_small_kl\20250301_212831\progress.csv", [1, 2], ["MSE Loss", "KL Divergence"])
-plot_loss_evolution(r"history\mnist\vae_big_kl\20250301_213545\progress.csv", [1, 2], ["MSE Loss", "KL Divergence"])
+# plot_loss_evolution(r"history\mnist\vae_big_kl\20250301_213545\progress.csv", [1, 2], ["MSE Loss", "KL Divergence"])
+plot_loss_evolution(r"history\sinewave\cvae_low-dim32\20250319_165404\progress.csv", [1, 2], ["MSE Loss", "KL Divergence"])
 
