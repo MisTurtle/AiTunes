@@ -334,7 +334,10 @@ class CVAE(AiTunesAutoencoderModule):
         return self._decoder(z)
     
     def sample(self, n = 1):
-        return torch.randn((n, self._latent_dimension))
+        mu = self._encoder._mu(torch.randn((n, self._encoder.shapes[-1])))
+        log_var = self._encoder._log_var((n, torch.randn(self._encoder.shapes[-1])))
+        return reparameterize(mu, log_var)
+        # return torch.randn((n, self._latent_dimension))
     
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)
@@ -456,7 +459,11 @@ class ResNet2dV1(AiTunesAutoencoderModule):  # Again, this could reuse the CVAE 
         return self._decoder(z)
     
     def sample(self, n = 1):
-        return torch.randn((n, self._latent_space_dim))
+        size = np.prod(self._shape_before_bottleneck)
+        mu = self._mu(torch.randn((n, size)))
+        log_var = self._log_var(torch.randn((n, size)))
+        return reparameterize(mu, log_var)
+        # return torch.randn((n, self._latent_space_dim))
     
     def forward(self, x, training=False):
         mu, log_var = self.encode(x)

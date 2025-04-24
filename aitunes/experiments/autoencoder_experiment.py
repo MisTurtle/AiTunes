@@ -181,43 +181,56 @@ class AutoencoderExperiment(ABC):
             self.__display_umap_projection(on_training)
 
     def train(self, epochs: int):
-        self._model.train(True)
-        self._support.add_total_epochs(epochs)
-        self._support.log(f"A training session of {epochs} epochs is about to start...")
+        self._model.train(True)  # Passe le modèle en mode entraînement
+        self._support.add_total_epochs(epochs)  # Met à jour le nombre d'époques appliquées au modèle
+        self._support.log(f"A training session of {epochs} epochs is about to start...")  # Affichage
 
         for _ in range(epochs):
+            # Extraction des lots mélangés par le générateur self.next_batch
             for batch, *extra in self.next_batch(training=True, lookup_labels=False):
-                self._optimizer.zero_grad()
-                # Predict with the current model state and compute the loss
+                self._optimizer.zero_grad()  # Réinitialisation du gradient
+
+                # Prédiction du modèle sur le lot de données actuel
                 embedding, prediction, *args = self._model(batch, training=True)
+                # Evaluation de la fonction objectif self._loss_criterion
                 combined_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
+                # Population de l'arbre des gradients accumulé dans le tenseur issu de l'évaluation précédente
                 combined_loss.backward()
 
-                # Check for any nans and stop training if one or more is found
+                # Sécurité: Arrête automatiquement l'entraînement si un NaN est détecté dans les poids du modèle
                 if torch.isnan(combined_loss):
                     self.crash_nans()
 
-                # Run an optimizer step and log the result
+                # Modification des poids du réseau en fonction des gradients calculés par combined_loss.backward()
                 self._optimizer.step()
+                # Enregistrement et affichage du résultat intermédiaire
                 self._support.add_batch_result(combined_loss.item(), *loss_components).log_training_loss()
 
+            # Affichage de la perte moyenne de l'époque dans la console et préparatifs pour l'époque suivante
             self._support.log_training_loss(ended=True).next_epoch()
-            # Save the model only if necessary (checks are performed in the support directly)
+            # Sauvegarde le modèle (rien ne se passe si ce n'est pas le moment de réaliser la sauvegarde)
             self._support.perform_save(self._save_weights)
         
         self._support.trained = True
 
     def evaluate(self):
         self._support.log("An evaluation session of the model is about to start...")
-        self._support.blank_epoch()
-        self._model.eval()
+        self._support.blank_epoch()  # Réinitialisation pour une nouvelle époque
+        self._model.eval()  # Passe le modèle en mode évaluation
         
-        with torch.no_grad():            
+        # Indique qu'un arbre des gradients n'est pas nécessaire puisqu'aucune rétropropagation ne sera réalisée
+        with torch.no_grad():
+            # Extraction des lots mélangés par le générateur self.next_batch      
             for batch, *extra in self.next_batch(training=False, lookup_labels=False):
+                # Prédiction du modèle sur le lot de données actuel
                 embedding, prediction, *args = self._model(batch, training=False)
+                # Evaluation de la fonction objectif self._loss_criterion
                 batch_loss, *loss_components = self._loss_criterion(prediction, batch, *args)
+                # Application de fonctions annexes, potentiellement pour une visualisation des sorties
                 self.apply_middlewares(batch, prediction, embedding, extra, args)
-                self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation", False, True)
+                # Enregistrement et affichage du résultat intermédiaire
+                self._support.add_batch_result(batch_loss, *loss_components).log_running_loss("Evaluation")
+            # Affichage de la perte moyenne de l'époque d'évaluation dans la console
             self._support.log_running_loss("Evaluation", True, False)
 
     @abstractmethod

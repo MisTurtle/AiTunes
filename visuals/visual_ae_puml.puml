@@ -1,0 +1,29 @@
+@startuml VanillaAutoeEncoder
+
+class nn.Module {
+    forward(x: torch.Tensor, training: bool)
+}
+abstract class AiTunesAutoencoderModule {
+    encode(x: torch.Tensor)
+    decode(z: torch.Tensor)
+    sample(n: int)
+}
+
+class VanillaEncoder {
+    # _dimensions : int[]
+    # _layers: nn.Sequential
+}
+class VanillaDecoder {
+    # _dimensions : int[]
+    # _layers: nn.Sequential
+    # _activation: nn.Module
+}
+class VanillaAutoEncoder {
+}
+
+abstract class AiTunesAutoencoderModule extends nn.Module
+class VanillaEncoder extends nn.Module
+class VanillaDecoder extends nn.Module
+class VanillaAutoEncoder extends AiTunesAutoencoderModule
+VanillaAutoEncoder --> VanillaEncoder : _encoder
+VanillaAutoEncoder --> VanillaDecoder : _decoder

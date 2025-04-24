@@ -115,7 +115,7 @@ class MnistExperiment(AutoencoderExperiment):
         _, ax = plt.subplots()
         ax.set_xlabel("Latent Dim 1")
         ax.set_ylabel("Latent Dim 2")
-        ax.set_title(f"{self._support._name} Latent Embedding")
+        ax.set_title(f"Latent Space (KL Weight = 0.001)")
 
         self.embeds = np.array(self.embeds)
         self.labels = np.array(self.labels)

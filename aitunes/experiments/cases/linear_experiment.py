@@ -13,21 +13,22 @@ class LinearExperiment(AutoencoderExperiment):
         if not isinstance(val, np.ndarray):
             val = np.array(val)    
         return np.column_stack((
-            val[:, 0]**2,                     # Quadratic term
-            np.sin(val[:, 1] * val[:, 2]),    # Sine of product
-            np.log(1 + np.abs(val[:, 0])),    # Log transform
-            val[:, 1] * val[:, 2],            # Interaction term
-            np.exp(val[:, 2]) / np.exp(1)     # Exponential
+            val[:, 0]**2,                     # Terme quadratique
+            np.sin(val[:, 1] * val[:, 2]),    # Sinus du produit
+            np.log(1 + np.abs(val[:, 0])),    # Transformation logarithmique
+            val[:, 1] * val[:, 2],            # Multiplication
+            np.exp(val[:, 2]) / np.exp(1)     # Exponentiel
         ))
     
     def __init__(self, model, weights_path, loss, optimizer):
         super().__init__("5D VECTORS", model, weights_path, loss, optimizer)
+        # Création des datasets d'entraînement et d'évaluation
         self.training_data = self.expand_3d_vector(np.random.rand(2000, 3))
         self.evaluation_data = self.expand_3d_vector(np.random.rand(50, 3))
 
     @property
     def batch_size(self) -> int:
-        return 32
+        return 32  # Nombre de vecteurs par lot
     
     @property
     def batch_per_epoch(self) -> int:
@@ -35,7 +36,6 @@ class LinearExperiment(AutoencoderExperiment):
     
     def next_batch(self, training, lookup_labels: bool = False):
         dataset = self.training_data if training else self.evaluation_data
-
         np.random.shuffle(dataset)
         for i in range(dataset.shape[0] // self.batch_size):
             yield torch.tensor(dataset[i * self.batch_size:(i + 1) * self.batch_size], dtype=torch.float32), None
@@ -45,13 +45,13 @@ class LinearExperiment(AutoencoderExperiment):
         with torch.no_grad():
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
 
-            # Bar plot X labels and ticks
+            # Labels en X pour le graphique en barres
             X_labels = [f"Z[{i}]" for i in range(5)]
             X_ticks = np.arange(len(X_labels))
-            # Create bar plots
+            # Graphique en barres
             bar_og = ax.bar(X_ticks - 0.1, np.zeros_like(X_ticks), 0.2, label = "Original", color='b')
             bar_rec = ax.bar(X_ticks + 0.1, np.zeros_like(X_ticks), 0.2, label = "Reconstructed", color='r')
-            # Add ticks
+            # Ticks
             ax.set_xticks(X_ticks, X_labels)
             ax.set_ylim(-0.1, 1.1)
             
@@ -71,20 +71,17 @@ class LinearExperiment(AutoencoderExperiment):
                 rec_heights = rec_heights.cpu().numpy()
 
                 for bar, height in zip(bar_og, og_heights[0]):
-                    bar.set_height(height)
-                
+                    bar.set_height(height)                
                 for bar, height in zip(bar_rec, rec_heights[0]):
                     bar.set_height(height)
-                
                 fig.canvas.draw_idle()
             
             slider_1.on_changed(update)
             slider_2.on_changed(update)
             slider_3.on_changed(update)
-
             update()
 
-            # Add plot labels
+            # Titres du graphique et des axes
             ax.legend()
             ax.set_title("Linear Augmentation from 3D to 5D")
             ax.set_xlabel("Coordinate")
@@ -92,4 +89,3 @@ class LinearExperiment(AutoencoderExperiment):
             ax.legend()
             
             plt.show()
-

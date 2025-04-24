@@ -39,7 +39,7 @@ class LinearAugmentationScenarios(ScenarioContainer):
     
     @scenario(name="AE", version="deep_world", description="A test to validate the SimpleAutoEncoder architecture with a deeper network")
     def ae_deep_world(self):
-        model = VanillaAutoEncoder(5, [8, 6, 6, 8], 3)
+        model = VanillaAutoEncoder(input_shape=5, hidden_layer_dimensions=[8, 7, 6], latent_dimension=3)
         loss = create_mse_loss(reduction='mean')
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         return model, loss, optimizer

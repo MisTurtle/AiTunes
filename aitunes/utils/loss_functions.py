@@ -30,11 +30,10 @@ def create_mse_loss(reduction='mean'):
     return _loss
 
 def kl_loss(mu, log_var, reduce=True):
+    # Sécurité pour éviter l'explosion du gradient à cause de log_var.exp()
     log_var = torch.clamp(log_var, min=-10, max=10)
     kl_sum = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
-    if reduce:
-        return kl_sum / mu.size(0),
-    return kl_sum,
+    return kl_sum / mu.size(0),
 
 def create_kl_loss(reduce=True):
     def _loss(prediction, target, *args):
