@@ -1,4 +1,4 @@
-from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer
+from aitunes.experiments.scenarios._scenario_utils import ScenarioContainer, scenario
 from .linear_scenarios import LinearAugmentationScenarios
 from .mnist_scenarios import MnistReconstructionScenarios
 from .cifar10_scenarios import Cifar10ReconstructionScenarios
