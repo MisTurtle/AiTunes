@@ -19,7 +19,7 @@ This repository was developped during a 4th year engineering project at Polytech
 - [Related Projects](#related-projects)
     - [AiTunes Web Project](#aitunes-web-project)
 
-<!-- /TOC -->is written in Python and mainly makes use of the following libraries:
+<!-- /TOC -->
 
 | Technology | Purpose                 |
 | ---------- | ----------------------- |
@@ -49,15 +49,15 @@ We have experimented with the following datasets:
 
 ### Audio generation
 
-[+ **Package:** ``aitunes.audio_generation``](aitunes/audio_generation/)
-[+ **Tests:** ``tests/test_simple_audio_generation.py``](tests/test_simple_audio_generation.py)
++ **Package:** [``aitunes.audio_generation``](aitunes/audio_generation/)
++ **Tests:** [``tests/test_simple_audio_generation.py``](tests/test_simple_audio_generation.py)
 
 We have created a small set of functions to generate simple audios like sine wave combinations and simple chords.
 
 
 ### Audio processing
-[+ **Package:** ``aitunes.audio_processing``](aitunes/audio_processing/)
-[+ **Tests:** ``tests/test_processing_interface.py``](tests/test_processing_interface.py)
++ **Package:** [``aitunes.audio_processing``](aitunes/audio_processing/)
++ **Tests:** [``tests/test_processing_interface.py``](tests/test_processing_interface.py)
 
 In order to focus our efforts on the deep-learning part of the code, we have developped a versatile helper class to isolate audio-related systems. This AudioProcessingInterface class can be found under the [``aitunes/audio_processing/processing_interface``](aitunes/audio_processing/) package and provides support for:
 
@@ -68,7 +68,7 @@ In order to focus our efforts on the deep-learning part of the code, we have dev
 ### Deep Learning Models
 #### Experiments
 
-[+ **Packages:** ``aitunes.experiments``](aitunes/experiments/), [``aitunes.experiments.cases``](aitunes/experiments/cases/)
++ **Packages:** [``aitunes.experiments``](aitunes/experiments/), [``aitunes.experiments.cases``](aitunes/experiments/cases/)
 
 An experiment wraps around a dataset and links it to a PyTorch model to provide standardized functions that perform specific actions, like fetching the next batch of data or initiating an interactive evaluation of said model. Any function that isn't directly linked to the model or dataset parsing is stored in an external support class.
 
@@ -80,7 +80,7 @@ An experiment wraps around a dataset and links it to a PyTorch model to provide 
 
 #### Scenarios
 
-[+ **Package:** ``aitunes.audio_processing``](aitunes/experiments/scenarios/)
++ **Package:** [``aitunes.audio_processing``](aitunes/experiments/scenarios/)
 
 A scenario is likely defined inside a ``ScenarioContainer`` and is marked with the ``@scenario`` decorator from the [``aitunes.experiments.scenarios``](aitunes\experiments\scenarios\_scenario_utils.py) package. It defines a couple of fields for identification like a name, version and description. It can also be marked as ``prod_grade`` and will thus require a production name (``prod_name``) and description (``prod_desc``).
 
@@ -132,7 +132,7 @@ It is used in headless mode (when running main.py with the ``--headless`` modifi
 | --- | --- | --- | --- | --- |
 | --headless | / | False | Runs in headless mode (no GUI) | / |
 | --experiment | -E | / | Select an experiment to use | True |
-| --scenario | -S | / | True |
+| --scenario | -S | / | Select a scenario to run | True |
 | --model | -M | / | A path to the model that needs to be loaded | False |
 | --epochs | -e | / | How many epochs to train the model | True |
 | --save_every | -s | 0 | How often to save a checkpoint during training | False |
